@@ -12,12 +12,12 @@ import {
 const nav = [
   { to: "/", label: "Home", icon: LayoutDashboard, end: true },
   { to: "/scrape", label: "Scrape", icon: Globe, ready: true },
-  { to: "/search", label: "Search", icon: Search },
+  { to: "/search", label: "Search", icon: Search, ready: true },
   { to: "/map", label: "Map", icon: MapIcon },
   { to: "/crawl", label: "Crawl", icon: Layers },
   { to: "/extract", label: "Extract", icon: Sparkles },
   { to: "/parse", label: "Parse PDF", icon: FileText },
-  { to: "/browser", label: "Browser", icon: Monitor },
+  { to: "/browser", label: "Browser", icon: Monitor, ready: true },
   { to: "/jobs", label: "Jobs", icon: ListChecks },
 ];
 

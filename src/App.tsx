@@ -8,6 +8,8 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import Scrape from "./pages/Scrape";
+import SearchPage from "./pages/Search";
+import BrowserSessions from "./pages/Browser";
 import Jobs from "./pages/Jobs";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
@@ -27,12 +29,12 @@ const App = () => (
               <Route path="/" element={<Home />} />
               <Route path="/scrape" element={<Scrape />} />
               <Route path="/jobs" element={<Jobs />} />
-              <Route path="/search" element={<ComingSoon title="Search" description="Web search with optional content scraping of every result." />} />
+            <Route path="/search" element={<SearchPage />} />
               <Route path="/map" element={<ComingSoon title="Map" description="Discover every URL on a website in seconds." />} />
               <Route path="/crawl" element={<ComingSoon title="Crawl" description="Recursively scrape entire sites with smart depth controls." />} />
               <Route path="/extract" element={<ComingSoon title="Extract" description="LLM-powered structured data extraction with schemas." />} />
               <Route path="/parse" element={<ComingSoon title="Parse PDF" description="Turn PDFs and documents into clean structured text." />} />
-              <Route path="/browser" element={<ComingSoon title="Browser" description="Interactive browser sessions for stubborn JS-heavy sites." />} />
+            <Route path="/browser" element={<BrowserSessions />} />
               <Route path="/settings" element={<ComingSoon title="Settings" description="Account preferences and API key management." />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

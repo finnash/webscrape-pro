@@ -9,12 +9,12 @@ import { lifetimeEstimates, TOTAL_CREDITS } from "@/lib/credits";
 
 const cards = [
   { to: "/scrape", icon: Globe, title: "Scrape", desc: "Extract clean markdown, HTML, links and screenshots from any URL.", ready: true },
-  { to: "/search", icon: Search, title: "Search", desc: "Web search with optional content scraping of every result." },
+  { to: "/search", icon: Search, title: "Search", desc: "Web search with optional content scraping of every result.", ready: true },
   { to: "/map", icon: MapIcon, title: "Map", desc: "Discover every URL on a website in seconds." },
   { to: "/crawl", icon: Layers, title: "Crawl", desc: "Recursively scrape entire sites with smart depth controls." },
   { to: "/extract", icon: Sparkles, title: "Extract", desc: "LLM-powered structured data extraction with schemas." },
   { to: "/parse", icon: FileText, title: "Parse PDF", desc: "Turn PDFs and documents into clean structured text." },
-  { to: "/browser", icon: Monitor, title: "Browser", desc: "Interactive browser sessions for stubborn, JS-heavy sites." },
+  { to: "/browser", icon: Monitor, title: "Browser", desc: "Live view of every browser session the platform spins up.", ready: true },
 ];
 
 export default function Home() {
