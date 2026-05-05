@@ -41,20 +41,27 @@ export default function Scrape() {
     setFormats((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
   const run = async () => {
-    if (!url) { toast.error("Enter a URL"); return; }
+    if (!url.trim()) { toast.error("Enter a URL"); return; }
     if (formats.length === 0) { toast.error("Pick at least one format"); return; }
+    // Auto-prefix protocol so users can paste "example.com".
+    let normalized = url.trim();
+    if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+    try { new URL(normalized); } catch {
+      toast.error("That doesn't look like a valid URL. Try the Search tab if you want to search the web.");
+      return;
+    }
     setLoading(true);
     setResult(null);
 
     const { data: jobRow } = await supabase.from("jobs").insert({
-      user_id: user!.id, endpoint: "scrape", input_url: url, status: "running", formats,
+      user_id: user!.id, endpoint: "scrape", input_url: normalized, status: "running", formats,
     }).select().single();
 
     try {
       const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
-        body: { url, formats, onlyMainContent: onlyMain },
+        body: { url: normalized, formats, onlyMainContent: onlyMain },
       });
-      if (error) throw error;
+      if (error) throw new Error(data?.error || error.message || "Scrape failed");
       if (!data?.success) throw new Error(data?.error || "Scrape failed");
       setResult(data.data);
       if (jobRow) await supabase.from("jobs").update({ status: "completed", result: data.data, credits_used: cost }).eq("id", jobRow.id);
