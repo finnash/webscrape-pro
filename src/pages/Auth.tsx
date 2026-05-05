@@ -32,7 +32,14 @@ export default function Auth() {
       options: { emailRedirectTo: window.location.origin },
     });
     setBusy(false);
-    if (error) toast.error(error.message); else toast.success("Check your inbox to confirm your email.");
+    if (error) {
+      const msg = /SIGNUP_RESTRICTED|Database error saving new user|allowlist|check_violation/i.test(error.message)
+        ? "Signups are restricted on Firecrawl Pro. Contact Finn to get access."
+        : error.message;
+      toast.error(msg);
+    } else {
+      toast.success("Check your inbox to confirm your email.");
+    }
   };
   const google = async () => {
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
