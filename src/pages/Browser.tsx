@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Monitor, Plus, Trash2, Play, Loader2, Camera, MousePointerClick, Keyboard, Clock, ArrowDown, Sparkles } from "lucide-react";
+import { Monitor, Trash2, Play, Loader2, Camera, MousePointerClick, Keyboard, Clock, ArrowDown, Sparkles, Code2, Coins, Hand } from "lucide-react";
 
 type Action =
   | { type: "wait"; milliseconds: number }
@@ -17,7 +17,8 @@ type Action =
   | { type: "write"; text: string }
   | { type: "press"; key: string }
   | { type: "scroll"; direction?: "up" | "down" }
-  | { type: "screenshot"; fullPage?: boolean };
+  | { type: "screenshot"; fullPage?: boolean }
+  | { type: "executeJavascript"; script: string };
 
 const ACTION_META: Record<Action["type"], { label: string; icon: any; color: string }> = {
   click:      { label: "Click",      icon: MousePointerClick, color: "text-blue-500" },
@@ -26,6 +27,7 @@ const ACTION_META: Record<Action["type"], { label: string; icon: any; color: str
   wait:       { label: "Wait",       icon: Clock,             color: "text-amber-500" },
   scroll:     { label: "Scroll",     icon: ArrowDown,         color: "text-emerald-500" },
   screenshot: { label: "Screenshot", icon: Camera,            color: "text-primary" },
+  executeJavascript: { label: "JS click @ point", icon: Code2, color: "text-pink-500" },
 };
 
 const PRESETS: { name: string; url: string; actions: Action[] }[] = [
@@ -59,6 +61,21 @@ export default function BrowserSessions() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [history, setHistory] = useState<any[] | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Firecrawl browser pricing reference (v2):
+  // ~1 credit / scrape call + ~1 credit per page action. For a long-running
+  // headless session this works out to roughly 60 credits/min at 1 action/sec.
+  const CREDITS_PER_MIN = 60;
+  const liveCredits = Math.max(1, Math.ceil((elapsed / 60) * CREDITS_PER_MIN));
+
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   const loadHistory = async () => {
     const { data } = await supabase.from("jobs").select("*")
@@ -74,25 +91,26 @@ export default function BrowserSessions() {
 
   const usePreset = (p: typeof PRESETS[number]) => { setUrl(p.url); setActions(p.actions); setResult(null); };
 
-  const run = async () => {
+  const run = async (overrideActions?: Action[]) => {
     if (!url.trim()) { toast.error("Enter a starting URL"); return; }
     let normalized = url.trim();
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
-    setLoading(true); setResult(null);
+    const runActions = overrideActions ?? actions;
+    setLoading(true);
 
     const { data: jobRow } = await supabase.from("jobs").insert({
       user_id: user!.id, endpoint: "browser", input_url: normalized, status: "running",
-      options: { actions } as any,
+      options: { actions: runActions } as any,
     }).select().single();
 
     try {
       const { data, error } = await supabase.functions.invoke("firecrawl-browser", {
-        body: { url: normalized, actions },
+        body: { url: normalized, actions: runActions },
       });
       if (error) throw new Error(data?.error || error.message);
       if (!data?.success) throw new Error(data?.error || "Browser run failed");
       setResult(data.data);
-      const cost = Math.max(2, actions.length + 1);
+      const cost = Math.max(2, runActions.length + 1);
       if (jobRow) await supabase.from("jobs").update({ status: "completed", result: data.data, credits_used: cost }).eq("id", jobRow.id);
       toast.success("Browser session complete");
       loadHistory();
@@ -108,6 +126,26 @@ export default function BrowserSessions() {
     const acts = result.actions?.screenshots;
     return Array.isArray(acts) && acts.length ? acts[acts.length - 1] : null;
   }, [result]);
+
+  // Manual click on the rendered screenshot → translate to natural-image
+  // coordinates and append a JS click action, then replay the session.
+  const handleViewportClick = async (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!manualMode || !imgRef.current || loading) return;
+    const img = imgRef.current;
+    const rect = img.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) / rect.width;
+    const sy = (e.clientY - rect.top) / rect.height;
+    const x = Math.round(sx * (img.naturalWidth || 1280));
+    const y = Math.round(sy * (img.naturalHeight || 800));
+    const jsAction: Action = {
+      type: "executeJavascript",
+      script: `(()=>{const el=document.elementFromPoint(${x},${y});if(el){el.scrollIntoView({block:'center'});el.click();}})();`,
+    };
+    const next: Action[] = [...actions, jsAction, { type: "wait", milliseconds: 1200 }, { type: "screenshot", fullPage: true }];
+    setActions(next);
+    toast.message(`Clicked @ ${x},${y} — replaying…`);
+    await run(next);
+  };
 
   return (
     <AppShell>
@@ -192,7 +230,7 @@ export default function BrowserSessions() {
               </div>
             </div>
 
-            <Button onClick={run} disabled={loading || !url} className="w-full h-11 bg-gradient-fire text-primary-foreground hover:opacity-95">
+            <Button onClick={() => run()} disabled={loading || !url} className="w-full h-11 bg-gradient-fire text-primary-foreground hover:opacity-95">
               {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running…</> : <><Play className="mr-2 h-4 w-4" />Launch browser</>}
             </Button>
 
@@ -208,7 +246,7 @@ export default function BrowserSessions() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card shadow-elegant overflow-hidden min-h-[500px] flex flex-col">
+          <div className="rounded-2xl border border-border bg-card shadow-elegant overflow-hidden min-h-[500px] flex flex-col relative">
             <div className="border-b border-border px-4 py-2.5 flex items-center gap-2 bg-muted/30">
               <div className="flex gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
@@ -218,18 +256,41 @@ export default function BrowserSessions() {
               <div className="flex-1 mx-3 h-7 rounded-md bg-background border border-border px-3 flex items-center text-xs font-mono text-muted-foreground truncate">
                 {url || "about:blank"}
               </div>
+              <button
+                onClick={() => setManualMode((m) => !m)}
+                className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-md border transition ${manualMode ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:text-foreground"}`}
+                title="Click anywhere on the viewport to interact with the page"
+              >
+                <Hand className="h-3 w-3 inline mr-1" />Manual
+              </button>
               {loading && <Badge className="bg-primary/15 text-primary border-0 text-[10px] uppercase">Live</Badge>}
             </div>
-            <div className="flex-1 bg-muted/20 p-4 overflow-auto">
+            <div className="flex-1 bg-muted/20 p-4 overflow-auto relative">
               {!result && !loading && (
                 <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground">
                   <Monitor className="h-10 w-10 mb-3 opacity-40" />
                   <div className="text-sm">Launch a session to see the browser viewport here.</div>
                 </div>
               )}
-              {loading && <Skeleton className="w-full h-[400px] rounded-lg" />}
+              {loading && (
+                <div className="space-y-3">
+                  <Skeleton className="w-full h-[400px] rounded-lg" />
+                </div>
+              )}
               {screenshot && (
-                <img src={screenshot} alt="Browser viewport" className="w-full rounded-lg border border-border shadow-elegant" />
+                <img
+                  ref={imgRef}
+                  src={screenshot}
+                  alt="Browser viewport"
+                  onClick={handleViewportClick}
+                  className={`w-full rounded-lg border border-border shadow-elegant ${manualMode ? "cursor-crosshair ring-2 ring-primary/40" : ""}`}
+                />
+              )}
+              {manualMode && screenshot && (
+                <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  <MousePointerClick className="h-3 w-3 text-primary" />
+                  Manual mode on — click anywhere on the page to interact. Each click replays the session (~{Math.max(2, actions.length + 3)} credits).
+                </div>
               )}
               {result?.markdown && (
                 <details className="mt-4 text-xs">
@@ -238,6 +299,20 @@ export default function BrowserSessions() {
                 </details>
               )}
             </div>
+
+            {loading && (
+              <div className="absolute top-14 right-4 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-elegant px-3 py-2.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                <div className="h-8 w-8 rounded-lg bg-gradient-fire flex items-center justify-center">
+                  <Coins className="h-4 w-4 text-primary-foreground" />
+                </div>
+                <div className="text-xs">
+                  <div className="font-semibold tabular-nums">~{liveCredits} credits used</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} elapsed · {CREDITS_PER_MIN} cr/min rate
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
