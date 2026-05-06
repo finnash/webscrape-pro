@@ -102,6 +102,8 @@ export default function BrowserSessions() {
   const [loading, setLoading] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [frameReady, setFrameReady] = useState(false);
+  const [frameFailed, setFrameFailed] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [history, setHistory] = useState<any[] | null>(null);
   const [session, setSession] = useState<BrowserSession | null>(null);
@@ -158,6 +160,8 @@ export default function BrowserSessions() {
     setLoading(true);
     setResult(null);
     setSession(null);
+    setFrameReady(false);
+    setFrameFailed(false);
     let jobRow: any = null;
 
     try {
@@ -227,6 +231,8 @@ export default function BrowserSessions() {
           .eq("id", session.jobId);
       }
       setSession(null);
+      setFrameReady(false);
+      setFrameFailed(false);
       toast.success(`Browser stopped · ~${finalCredits} credits`);
       loadHistory();
     } catch (e: any) {
@@ -252,6 +258,8 @@ export default function BrowserSessions() {
       if (error) throw new Error(data?.error || error.message);
       if (!data?.success) throw new Error(data?.error || "Refresh failed");
       const payload = data.data?.data ?? data.data;
+      setFrameReady(false);
+      setFrameFailed(false);
       setSession((cur) => cur ? {
         ...cur,
         liveViewUrl: payload?.liveViewUrl || cur.liveViewUrl,
@@ -474,13 +482,32 @@ export default function BrowserSessions() {
 
             <div className="flex-1 bg-muted/20 p-3 sm:p-4 overflow-auto relative">
               {session?.interactiveLiveViewUrl ? (
-                <iframe
-                  title="Interactive browser viewport"
-                  src={session.interactiveLiveViewUrl}
-                  className="w-full min-h-[560px] rounded-lg border border-border bg-background shadow-elegant"
-                  style={{ backgroundColor: "hsl(var(--background))" }}
-                  allow="clipboard-read; clipboard-write; fullscreen"
-                />
+                <div className="relative min-h-[560px]">
+                  {!frameReady && !frameFailed && (
+                    <div className="absolute inset-0 z-10 rounded-lg border border-border bg-background flex flex-col items-center justify-center text-center text-muted-foreground">
+                      <Loader2 className="h-8 w-8 mb-3 animate-spin text-primary" />
+                      <div className="text-sm">Connecting interactive stream…</div>
+                    </div>
+                  )}
+                  {frameFailed && (
+                    <div className="absolute inset-0 z-20 rounded-lg border border-border bg-background flex flex-col items-center justify-center text-center text-muted-foreground p-6">
+                      <Monitor className="h-8 w-8 mb-3 text-primary" />
+                      <div className="text-sm font-medium text-foreground">Live view blocked in this preview frame</div>
+                      <a href={session.interactiveLiveViewUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-primary hover:underline">
+                        Open manual browser <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  )}
+                  <iframe
+                    title="Interactive browser viewport"
+                    src={session.interactiveLiveViewUrl}
+                    className="w-full min-h-[560px] rounded-lg border border-border bg-background shadow-elegant"
+                    style={{ backgroundColor: "hsl(var(--background))" }}
+                    allow="clipboard-read; clipboard-write; fullscreen"
+                    onLoad={() => setFrameReady(true)}
+                    onError={() => setFrameFailed(true)}
+                  />
+                </div>
               ) : !result && !loading ? (
                 <div className="h-full min-h-[420px] flex flex-col items-center justify-center text-center text-muted-foreground">
                   <Monitor className="h-10 w-10 mb-3 opacity-40" />
