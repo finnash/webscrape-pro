@@ -93,6 +93,7 @@ const normalizeImageSrc = (value: string | null) => {
 };
 
 const formatCredits = (value: number) => value.toFixed(2).replace(/\.00$/, "");
+const billingTop = (value: number) => `calc(3.5rem + min(${Math.max(0, value)}px, 28vh))`;
 
 export default function BrowserSessions() {
   const { user } = useAuth();
@@ -323,7 +324,7 @@ export default function BrowserSessions() {
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 browser-page">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
             <Monitor className="h-6 w-6 text-primary" /> Browser
@@ -477,6 +478,7 @@ export default function BrowserSessions() {
                   title="Interactive browser viewport"
                   src={session.interactiveLiveViewUrl}
                   className="w-full min-h-[560px] rounded-lg border border-border bg-background shadow-elegant"
+                  style={{ backgroundColor: "hsl(var(--background))" }}
                   allow="clipboard-read; clipboard-write; fullscreen"
                 />
               ) : !result && !loading ? (
@@ -501,7 +503,7 @@ export default function BrowserSessions() {
             </div>
 
             {metered && (
-              <div className="absolute top-14 right-4 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-elegant px-3 py-2.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 max-w-[260px]">
+              <div className="absolute right-4 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-elegant px-3 py-2.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 max-w-[260px] pointer-events-none" style={{ top: billingTop(session?.interactiveLiveViewUrl ? 52 : 0) }}>
                 <div className="h-8 w-8 rounded-lg bg-gradient-fire flex items-center justify-center shrink-0">
                   <Coins className="h-4 w-4 text-primary-foreground" />
                 </div>
