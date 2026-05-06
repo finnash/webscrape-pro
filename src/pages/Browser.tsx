@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Monitor, Trash2, Play, Loader2, Camera, MousePointerClick, Keyboard, Clock, ArrowDown, Sparkles, Code2, Coins, Hand } from "lucide-react";
+import {
+  Activity,
+  ArrowDown,
+  Camera,
+  Clock,
+  Coins,
+  ExternalLink,
+  Hand,
+  Keyboard,
+  Loader2,
+  Monitor,
+  MousePointerClick,
+  Play,
+  RefreshCw,
+  Sparkles,
+  Square,
+  Trash2,
+} from "lucide-react";
 
 type Action =
   | { type: "wait"; milliseconds: number }
@@ -17,27 +34,30 @@ type Action =
   | { type: "write"; text: string }
   | { type: "press"; key: string }
   | { type: "scroll"; direction?: "up" | "down" }
-  | { type: "screenshot"; fullPage?: boolean }
-  | { type: "executeJavascript"; script: string };
+  | { type: "screenshot"; fullPage?: boolean };
+
+type BrowserSession = {
+  scrapeId: string;
+  launchUrl: string;
+  liveViewUrl?: string;
+  interactiveLiveViewUrl?: string;
+  jobId?: string;
+};
 
 const ACTION_META: Record<Action["type"], { label: string; icon: any; color: string }> = {
-  click:      { label: "Click",      icon: MousePointerClick, color: "text-blue-500" },
-  write:      { label: "Type text",  icon: Keyboard,          color: "text-purple-500" },
-  press:      { label: "Press key",  icon: Keyboard,          color: "text-purple-500" },
-  wait:       { label: "Wait",       icon: Clock,             color: "text-amber-500" },
-  scroll:     { label: "Scroll",     icon: ArrowDown,         color: "text-emerald-500" },
-  screenshot: { label: "Screenshot", icon: Camera,            color: "text-primary" },
-  executeJavascript: { label: "JS click @ point", icon: Code2, color: "text-pink-500" },
+  click: { label: "Click", icon: MousePointerClick, color: "text-primary" },
+  write: { label: "Type text", icon: Keyboard, color: "text-primary" },
+  press: { label: "Press key", icon: Keyboard, color: "text-primary" },
+  wait: { label: "Wait", icon: Clock, color: "text-muted-foreground" },
+  scroll: { label: "Scroll", icon: ArrowDown, color: "text-primary" },
+  screenshot: { label: "Screenshot", icon: Camera, color: "text-primary" },
 };
 
 const PRESETS: { name: string; url: string; actions: Action[] }[] = [
   {
     name: "Google search → first result",
-    url: "https://www.google.com",
+    url: "https://www.google.com/search?q=firecrawl+pro",
     actions: [
-      { type: "click", selector: "textarea[name='q']" },
-      { type: "write", text: "firecrawl pro" },
-      { type: "press", key: "Enter" },
       { type: "wait", milliseconds: 2000 },
       { type: "screenshot", fullPage: true },
     ],
@@ -54,137 +74,333 @@ const PRESETS: { name: string; url: string; actions: Action[] }[] = [
   },
 ];
 
+const BILLING = {
+  launchScrapeCredits: 2,
+  manualCreditsPerMinute: 2,
+  aiPromptCreditsPerMinute: 7,
+};
+
+const normalizeUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const normalizeImageSrc = (value: string | null) => {
+  if (!value) return null;
+  if (/^(https?:|data:|blob:)/i.test(value)) return value;
+  return `data:image/png;base64,${value}`;
+};
+
+const formatCredits = (value: number) => value.toFixed(2).replace(/\.00$/, "");
+const billingTop = (value: number) => `calc(3.5rem + min(${Math.max(0, value)}px, 28vh))`;
+
 export default function BrowserSessions() {
   const { user } = useAuth();
   const [url, setUrl] = useState("");
   const [actions, setActions] = useState<Action[]>([]);
   const [loading, setLoading] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [frameReady, setFrameReady] = useState(false);
+  const [frameFailed, setFrameFailed] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [history, setHistory] = useState<any[] | null>(null);
-  const [manualMode, setManualMode] = useState(false);
+  const [session, setSession] = useState<BrowserSession | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // Firecrawl browser pricing reference (v2):
-  // ~1 credit / scrape call + ~1 credit per page action. For a long-running
-  // headless session this works out to roughly 60 credits/min at 1 action/sec.
-  const CREDITS_PER_MIN = 60;
-  const liveCredits = Math.max(1, Math.ceil((elapsed / 60) * CREDITS_PER_MIN));
+  const metered = loading || Boolean(session);
+  const projectedManualCredits = BILLING.launchScrapeCredits + (elapsed / 60) * BILLING.manualCreditsPerMinute;
 
   useEffect(() => {
-    if (!loading) { setElapsed(0); return; }
+    if (!metered) {
+      setElapsed(0);
+      return;
+    }
     const t = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, [loading]);
+  }, [metered]);
 
   const loadHistory = async () => {
-    const { data } = await supabase.from("jobs").select("*")
-      .eq("endpoint", "browser").order("created_at", { ascending: false }).limit(20);
+    const { data } = await supabase
+      .from("jobs")
+      .select("*")
+      .eq("endpoint", "browser")
+      .order("created_at", { ascending: false })
+      .limit(20);
     setHistory(data || []);
   };
-  useEffect(() => { if (user) loadHistory(); }, [user]);
+
+  useEffect(() => {
+    if (user) loadHistory();
+  }, [user]);
 
   const addAction = (a: Action) => setActions((cur) => [...cur, a]);
   const removeAction = (i: number) => setActions((cur) => cur.filter((_, idx) => idx !== i));
   const updateAction = (i: number, patch: Partial<Action>) =>
-    setActions((cur) => cur.map((a, idx) => idx === i ? ({ ...a, ...patch } as Action) : a));
+    setActions((cur) => cur.map((a, idx) => (idx === i ? ({ ...a, ...patch } as Action) : a)));
 
-  const usePreset = (p: typeof PRESETS[number]) => { setUrl(p.url); setActions(p.actions); setResult(null); };
+  const usePreset = (p: (typeof PRESETS)[number]) => {
+    setUrl(p.url);
+    setActions(p.actions);
+    setResult(null);
+  };
 
-  const run = async (overrideActions?: Action[]) => {
-    if (!url.trim()) { toast.error("Enter a starting URL"); return; }
-    let normalized = url.trim();
-    if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
-    const runActions = overrideActions ?? actions;
+  const startManual = async () => {
+    if (!user) {
+      toast.error("Sign in first");
+      return;
+    }
+    const normalized = normalizeUrl(url);
+    if (!normalized) {
+      toast.error("Enter a starting URL");
+      return;
+    }
+
     setLoading(true);
+    setResult(null);
+    setSession(null);
+    setFrameReady(false);
+    setFrameFailed(false);
+    let jobRow: any = null;
 
-    const { data: jobRow } = await supabase.from("jobs").insert({
-      user_id: user!.id, endpoint: "browser", input_url: normalized, status: "running",
-      options: { actions: runActions } as any,
-    }).select().single();
+    try {
+      const { data: inserted } = await supabase
+        .from("jobs")
+        .insert({
+          user_id: user.id,
+          endpoint: "browser",
+          input_url: normalized,
+          status: "running",
+          options: { mode: "manual-live", billing: BILLING } as any,
+          credits_used: BILLING.launchScrapeCredits,
+        })
+        .select()
+        .single();
+      jobRow = inserted;
+
+      const { data, error } = await supabase.functions.invoke("firecrawl-browser", {
+        body: { mode: "start", url: normalized },
+      });
+      if (error) throw new Error(data?.error || error.message);
+      if (!data?.success) throw new Error(data?.error || "Manual browser launch failed");
+
+      const payload = data.data;
+      const nextSession: BrowserSession = {
+        scrapeId: payload.scrapeId,
+        launchUrl: normalized,
+        liveViewUrl: payload.liveViewUrl,
+        interactiveLiveViewUrl: payload.interactiveLiveViewUrl,
+        jobId: jobRow?.id,
+      };
+      setSession(nextSession);
+      setResult(payload.scrape || payload);
+
+      if (jobRow) {
+        await supabase
+          .from("jobs")
+          .update({ result: payload, credits_used: BILLING.launchScrapeCredits })
+          .eq("id", jobRow.id);
+      }
+      toast.success("Manual browser is live");
+      loadHistory();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to launch manual browser");
+      if (jobRow) await supabase.from("jobs").update({ status: "failed", error: e.message }).eq("id", jobRow.id);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stopManual = async () => {
+    if (!session) return;
+    setStopping(true);
+    const finalCredits = Math.ceil(projectedManualCredits);
 
     try {
       const { data, error } = await supabase.functions.invoke("firecrawl-browser", {
-        body: { url: normalized, actions: runActions },
+        body: { mode: "stop", scrapeId: session.scrapeId },
+      });
+      if (error) throw new Error(data?.error || error.message);
+      if (!data?.success) throw new Error(data?.error || "Could not stop browser session");
+
+      if (session.jobId) {
+        await supabase
+          .from("jobs")
+          .update({ status: "completed", result: { session, stopped: data.data }, credits_used: finalCredits })
+          .eq("id", session.jobId);
+      }
+      setSession(null);
+      setFrameReady(false);
+      setFrameFailed(false);
+      toast.success(`Browser stopped · ~${finalCredits} credits`);
+      loadHistory();
+    } catch (e: any) {
+      toast.error(e.message || "Could not stop browser session");
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const refreshManual = async () => {
+    if (!session) return;
+    setRefreshing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("firecrawl-browser", {
+        body: {
+          mode: "interact",
+          scrapeId: session.scrapeId,
+          code: "await page.waitForTimeout(250); JSON.stringify({ url: page.url(), title: await page.title() });",
+          language: "node",
+          timeout: 10,
+        },
+      });
+      if (error) throw new Error(data?.error || error.message);
+      if (!data?.success) throw new Error(data?.error || "Refresh failed");
+      const payload = data.data?.data ?? data.data;
+      setFrameReady(false);
+      setFrameFailed(false);
+      setSession((cur) => cur ? {
+        ...cur,
+        liveViewUrl: payload?.liveViewUrl || cur.liveViewUrl,
+        interactiveLiveViewUrl: payload?.interactiveLiveViewUrl || cur.interactiveLiveViewUrl,
+      } : cur);
+      toast.success("Browser view refreshed");
+    } catch (e: any) {
+      toast.error(e.message || "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const run = async (overrideActions?: Action[]) => {
+    if (!user) {
+      toast.error("Sign in first");
+      return;
+    }
+    const normalized = normalizeUrl(url);
+    if (!normalized) {
+      toast.error("Enter a starting URL");
+      return;
+    }
+    const runActions = overrideActions ?? actions;
+    setLoading(true);
+    setResult(null);
+
+    const { data: jobRow } = await supabase
+      .from("jobs")
+      .insert({
+        user_id: user.id,
+        endpoint: "browser",
+        input_url: normalized,
+        status: "running",
+        options: { mode: "scripted-actions", actions: runActions } as any,
+      })
+      .select()
+      .single();
+
+    try {
+      const { data, error } = await supabase.functions.invoke("firecrawl-browser", {
+        body: { mode: "actions", url: normalized, actions: runActions },
       });
       if (error) throw new Error(data?.error || error.message);
       if (!data?.success) throw new Error(data?.error || "Browser run failed");
       setResult(data.data);
-      const cost = Math.max(2, runActions.length + 1);
-      if (jobRow) await supabase.from("jobs").update({ status: "completed", result: data.data, credits_used: cost }).eq("id", jobRow.id);
-      toast.success("Browser session complete");
+      const cost = data.billing?.estimatedCredits || Math.max(2, runActions.length + 1);
+      if (jobRow) {
+        await supabase
+          .from("jobs")
+          .update({ status: "completed", result: data.data, credits_used: cost })
+          .eq("id", jobRow.id);
+      }
+      toast.success("Scripted browser run complete");
       loadHistory();
     } catch (e: any) {
       toast.error(e.message || "Failed");
       if (jobRow) await supabase.from("jobs").update({ status: "failed", error: e.message }).eq("id", jobRow.id);
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const screenshot = useMemo(() => {
     if (!result) return null;
-    if (result.screenshot) return result.screenshot;
+    if (result.screenshot) return normalizeImageSrc(result.screenshot);
     const acts = result.actions?.screenshots;
-    return Array.isArray(acts) && acts.length ? acts[acts.length - 1] : null;
+    return normalizeImageSrc(Array.isArray(acts) && acts.length ? acts[acts.length - 1] : null);
   }, [result]);
-
-  // Manual click on the rendered screenshot → translate to natural-image
-  // coordinates and append a JS click action, then replay the session.
-  const handleViewportClick = async (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!manualMode || !imgRef.current || loading) return;
-    const img = imgRef.current;
-    const rect = img.getBoundingClientRect();
-    const sx = (e.clientX - rect.left) / rect.width;
-    const sy = (e.clientY - rect.top) / rect.height;
-    const x = Math.round(sx * (img.naturalWidth || 1280));
-    const y = Math.round(sy * (img.naturalHeight || 800));
-    const jsAction: Action = {
-      type: "executeJavascript",
-      script: `(()=>{const el=document.elementFromPoint(${x},${y});if(el){el.scrollIntoView({block:'center'});el.click();}})();`,
-    };
-    const next: Action[] = [...actions, jsAction, { type: "wait", milliseconds: 1200 }, { type: "screenshot", fullPage: true }];
-    setActions(next);
-    toast.message(`Clicked @ ${x},${y} — replaying…`);
-    await run(next);
-  };
 
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 browser-page">
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2">
             <Monitor className="h-6 w-6 text-primary" /> Browser
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Spin up a real headless browser, drive it with click / type / scroll actions, and capture the final state. Foundation for agent control.
+            Live manual browser control with a real interactive viewport, plus scripted action replay for repeatable runs.
           </p>
         </div>
 
         <div className="grid lg:grid-cols-[420px_1fr] gap-4">
-          <div className="rounded-2xl border border-border bg-card shadow-elegant p-5 space-y-4">
+          <div className="rounded-2xl border border-border bg-card shadow-elegant p-5 space-y-5">
             <div>
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">Starting URL</Label>
               <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" className="mt-1" />
             </div>
 
+            <div className="space-y-3 border-b border-border pb-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">Manual live control</Label>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <Badge variant="secondary" className="text-[10px] uppercase">Interactive iframe</Badge>
+                    <Badge variant="secondary" className="text-[10px] uppercase">{BILLING.manualCreditsPerMinute} cr/min</Badge>
+                    <Badge variant="secondary" className="text-[10px] uppercase">Prorated/sec</Badge>
+                  </div>
+                </div>
+                {session && <Activity className="h-5 w-5 text-primary animate-pulse" />}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {!session ? (
+                  <Button onClick={startManual} disabled={loading || !url} className="col-span-2 h-11 bg-gradient-fire text-primary-foreground hover:opacity-95">
+                    {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Launching…</> : <><Hand className="mr-2 h-4 w-4" />Launch manual browser</>}
+                  </Button>
+                ) : (
+                  <>
+                    <Button onClick={refreshManual} disabled={refreshing || stopping} variant="outline" className="h-10">
+                      {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                      Refresh
+                    </Button>
+                    <Button onClick={stopManual} disabled={stopping} variant="destructive" className="h-10">
+                      {stopping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4" />}
+                      Stop
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Actions ({actions.length})</Label>
-                <div className="text-[10px] text-muted-foreground">runs in order</div>
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">Scripted actions ({actions.length})</Label>
+                <div className="text-[10px] text-muted-foreground">optional replay</div>
               </div>
-              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                 {actions.length === 0 && (
                   <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground text-center">
-                    No actions — we'll just open the page and screenshot it.
+                    No actions — scripted mode opens the page and screenshots it.
                   </div>
                 )}
                 {actions.map((a, i) => {
                   const M = ACTION_META[a.type];
                   return (
-                    <div key={i} className="rounded-lg border border-border bg-background p-2.5">
+                    <div key={`${a.type}-${i}`} className="rounded-lg border border-border bg-background p-2.5">
                       <div className="flex items-center gap-2 mb-1.5">
                         <M.icon className={`h-3.5 w-3.5 ${M.color}`} />
                         <span className="text-xs font-medium">{i + 1}. {M.label}</span>
-                        <button onClick={() => removeAction(i)} className="ml-auto text-muted-foreground hover:text-destructive">
+                        <button onClick={() => removeAction(i)} className="ml-auto text-muted-foreground hover:text-destructive" aria-label="Remove action">
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
@@ -211,8 +427,8 @@ export default function BrowserSessions() {
                     click: { type: "click", selector: "" },
                     write: { type: "write", text: "" },
                     press: { type: "press", key: "Enter" },
-                    wait:  { type: "wait", milliseconds: 1000 },
-                    scroll:{ type: "scroll", direction: "down" },
+                    wait: { type: "wait", milliseconds: 1000 },
+                    scroll: { type: "scroll", direction: "down" },
                     screenshot: { type: "screenshot", fullPage: true },
                   };
                   if (map[v]) addAction(map[v]);
@@ -230,8 +446,8 @@ export default function BrowserSessions() {
               </div>
             </div>
 
-            <Button onClick={() => run()} disabled={loading || !url} className="w-full h-11 bg-gradient-fire text-primary-foreground hover:opacity-95">
-              {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running…</> : <><Play className="mr-2 h-4 w-4" />Launch browser</>}
+            <Button onClick={() => run()} disabled={loading || Boolean(session) || !url} variant="outline" className="w-full h-10">
+              {loading && !session ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running…</> : <><Play className="mr-2 h-4 w-4" />Run scripted replay</>}
             </Button>
 
             <div>
@@ -246,53 +462,66 @@ export default function BrowserSessions() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card shadow-elegant overflow-hidden min-h-[500px] flex flex-col relative">
+          <div className="rounded-2xl border border-border bg-card shadow-elegant overflow-hidden min-h-[560px] flex flex-col relative">
             <div className="border-b border-border px-4 py-2.5 flex items-center gap-2 bg-muted/30">
               <div className="flex gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-destructive" />
+                <span className="h-2.5 w-2.5 rounded-full bg-primary/70" />
+                <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/60" />
               </div>
               <div className="flex-1 mx-3 h-7 rounded-md bg-background border border-border px-3 flex items-center text-xs font-mono text-muted-foreground truncate">
-                {url || "about:blank"}
+                {session?.launchUrl || url || "about:blank"}
               </div>
-              <button
-                onClick={() => setManualMode((m) => !m)}
-                className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-md border transition ${manualMode ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:text-foreground"}`}
-                title="Click anywhere on the viewport to interact with the page"
-              >
-                <Hand className="h-3 w-3 inline mr-1" />Manual
-              </button>
-              {loading && <Badge className="bg-primary/15 text-primary border-0 text-[10px] uppercase">Live</Badge>}
+              {session?.interactiveLiveViewUrl && (
+                <a href={session.interactiveLiveViewUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Open live browser in new tab">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+              {session && <Badge className="bg-primary/15 text-primary border-0 text-[10px] uppercase">Live</Badge>}
             </div>
-            <div className="flex-1 bg-muted/20 p-4 overflow-auto relative">
-              {!result && !loading && (
-                <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground">
+
+            <div className="flex-1 bg-muted/20 p-3 sm:p-4 overflow-auto relative">
+              {session?.interactiveLiveViewUrl ? (
+                <div className="relative min-h-[560px]">
+                  {!frameReady && !frameFailed && (
+                    <div className="absolute inset-0 z-10 rounded-lg border border-border bg-background flex flex-col items-center justify-center text-center text-muted-foreground">
+                      <Loader2 className="h-8 w-8 mb-3 animate-spin text-primary" />
+                      <div className="text-sm">Connecting interactive stream…</div>
+                    </div>
+                  )}
+                  {frameFailed && (
+                    <div className="absolute inset-0 z-20 rounded-lg border border-border bg-background flex flex-col items-center justify-center text-center text-muted-foreground p-6">
+                      <Monitor className="h-8 w-8 mb-3 text-primary" />
+                      <div className="text-sm font-medium text-foreground">Live view blocked in this preview frame</div>
+                      <a href={session.interactiveLiveViewUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-primary hover:underline">
+                        Open manual browser <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  )}
+                  <iframe
+                    title="Interactive browser viewport"
+                    src={session.interactiveLiveViewUrl}
+                    className="w-full min-h-[560px] rounded-lg border border-border bg-background shadow-elegant"
+                    style={{ backgroundColor: "hsl(var(--background))" }}
+                    allow="clipboard-read; clipboard-write; fullscreen"
+                    onLoad={() => setFrameReady(true)}
+                    onError={() => setFrameFailed(true)}
+                  />
+                </div>
+              ) : !result && !loading ? (
+                <div className="h-full min-h-[420px] flex flex-col items-center justify-center text-center text-muted-foreground">
                   <Monitor className="h-10 w-10 mb-3 opacity-40" />
-                  <div className="text-sm">Launch a session to see the browser viewport here.</div>
+                  <div className="text-sm">Launch a manual browser to control the live viewport here.</div>
                 </div>
-              )}
-              {loading && (
+              ) : loading ? (
                 <div className="space-y-3">
-                  <Skeleton className="w-full h-[400px] rounded-lg" />
+                  <Skeleton className="w-full h-[440px] rounded-lg" />
                 </div>
-              )}
-              {screenshot && (
-                <img
-                  ref={imgRef}
-                  src={screenshot}
-                  alt="Browser viewport"
-                  onClick={handleViewportClick}
-                  className={`w-full rounded-lg border border-border shadow-elegant ${manualMode ? "cursor-crosshair ring-2 ring-primary/40" : ""}`}
-                />
-              )}
-              {manualMode && screenshot && (
-                <div className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
-                  <MousePointerClick className="h-3 w-3 text-primary" />
-                  Manual mode on — click anywhere on the page to interact. Each click replays the session (~{Math.max(2, actions.length + 3)} credits).
-                </div>
-              )}
-              {result?.markdown && (
+              ) : screenshot ? (
+                <img src={screenshot} alt="Browser viewport" className="w-full rounded-lg border border-border shadow-elegant" />
+              ) : null}
+
+              {result?.markdown && !session && (
                 <details className="mt-4 text-xs">
                   <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Page markdown ({result.markdown.length} chars)</summary>
                   <pre className="mt-2 p-3 rounded-lg bg-background border border-border max-h-64 overflow-auto whitespace-pre-wrap">{result.markdown.slice(0, 5000)}</pre>
@@ -300,15 +529,15 @@ export default function BrowserSessions() {
               )}
             </div>
 
-            {loading && (
-              <div className="absolute top-14 right-4 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-elegant px-3 py-2.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                <div className="h-8 w-8 rounded-lg bg-gradient-fire flex items-center justify-center">
+            {metered && (
+              <div className="absolute right-4 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-elegant px-3 py-2.5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 max-w-[260px] pointer-events-none" style={{ top: billingTop(session?.interactiveLiveViewUrl ? 52 : 0) }}>
+                <div className="h-8 w-8 rounded-lg bg-gradient-fire flex items-center justify-center shrink-0">
                   <Coins className="h-4 w-4 text-primary-foreground" />
                 </div>
-                <div className="text-xs">
-                  <div className="font-semibold tabular-nums">~{liveCredits} credits used</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} elapsed · {CREDITS_PER_MIN} cr/min rate
+                <div className="text-xs min-w-0">
+                  <div className="font-semibold tabular-nums">~{formatCredits(projectedManualCredits)} credits</div>
+                  <div className="text-[10px] text-muted-foreground leading-tight">
+                    {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} · {BILLING.manualCreditsPerMinute} cr/min + {BILLING.launchScrapeCredits} cr launch
                   </div>
                 </div>
               </div>
@@ -326,9 +555,9 @@ export default function BrowserSessions() {
             <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
               {history.map((j) => (
                 <div key={j.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
-                  <div className={`h-2 w-2 rounded-full ${j.status === "completed" ? "bg-emerald-500" : j.status === "failed" ? "bg-destructive" : "bg-amber-500"}`} />
+                  <div className={`h-2 w-2 rounded-full ${j.status === "completed" ? "bg-primary" : j.status === "failed" ? "bg-destructive" : "bg-muted-foreground"}`} />
                   <div className="flex-1 truncate font-mono text-xs">{j.input_url}</div>
-                  <div className="text-xs text-muted-foreground">{(j.options?.actions?.length || 0)} actions · {j.credits_used || 0} cr</div>
+                  <div className="text-xs text-muted-foreground">{j.options?.mode || "browser"} · {j.credits_used || 0} cr</div>
                 </div>
               ))}
             </div>
