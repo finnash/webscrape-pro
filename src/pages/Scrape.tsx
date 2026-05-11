@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Input } from "@/components/ui/input";
@@ -8,22 +8,40 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Globe, Download, Copy, ChevronDown, Sparkles, Loader2 } from "lucide-react";
+import { Globe, Download, Copy, ChevronDown, Sparkles, Loader2, Smartphone, Clock, Zap, FileText, Image as ImageIcon, Link2, Code, X } from "lucide-react";
 import { estimateScrapeCost } from "@/lib/credits";
 
 const FORMATS = [
-  { id: "markdown", label: "Markdown", desc: "Clean LLM-ready text" },
-  { id: "html", label: "HTML", desc: "Processed HTML" },
-  { id: "rawHtml", label: "Raw HTML", desc: "Original markup" },
-  { id: "links", label: "Links", desc: "All URLs on page" },
-  { id: "screenshot", label: "Screenshot", desc: "Full-page image" },
-  { id: "summary", label: "AI Summary", desc: "Concise overview" },
+  { id: "markdown", label: "Markdown", desc: "Clean LLM-ready text", icon: FileText },
+  { id: "html", label: "HTML", desc: "Processed HTML", icon: Code },
+  { id: "rawHtml", label: "Raw HTML", desc: "Original markup", icon: Code },
+  { id: "links", label: "Links", desc: "All URLs on page", icon: Link2 },
+  { id: "screenshot", label: "Screenshot", desc: "Full-page image", icon: ImageIcon },
+  { id: "summary", label: "AI Summary", desc: "Concise overview", icon: Sparkles },
 ];
+
+const PRESETS = [
+  { id: "llm", label: "LLM-ready", icon: Sparkles, formats: ["markdown", "summary"] },
+  { id: "seo", label: "SEO audit", icon: Zap, formats: ["links", "screenshot", "summary"] },
+  { id: "archive", label: "Full archive", icon: FileText, formats: ["markdown", "rawHtml", "screenshot"] },
+];
+
+const RECENT_KEY = "fcp.recent_urls";
+const loadRecent = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; }
+};
+const pushRecent = (u: string) => {
+  try {
+    const arr = [u, ...loadRecent().filter((x) => x !== u)].slice(0, 6);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(arr));
+  } catch {}
+};
 
 export default function Scrape() {
   const [params] = useSearchParams();
@@ -31,19 +49,23 @@ export default function Scrape() {
   const [url, setUrl] = useState(params.get("url") || "");
   const [formats, setFormats] = useState<string[]>(["markdown", "links"]);
   const [onlyMain, setOnlyMain] = useState(true);
+  const [waitFor, setWaitFor] = useState(0);
+  const [mobile, setMobile] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [recent, setRecent] = useState<string[]>(() => loadRecent());
 
   const cost = estimateScrapeCost(formats);
 
   const toggleFormat = (id: string) =>
     setFormats((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
+  const applyPreset = (p: typeof PRESETS[number]) => setFormats(p.formats);
+
   const run = async () => {
     if (!url.trim()) { toast.error("Enter a URL"); return; }
     if (formats.length === 0) { toast.error("Pick at least one format"); return; }
-    // Auto-prefix protocol so users can paste "example.com".
     let normalized = url.trim();
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
     try { new URL(normalized); } catch {
@@ -59,11 +81,19 @@ export default function Scrape() {
 
     try {
       const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
-        body: { url: normalized, formats, onlyMainContent: onlyMain },
+        body: {
+          url: normalized,
+          formats,
+          onlyMainContent: onlyMain,
+          waitFor: waitFor > 0 ? waitFor : undefined,
+          mobile: mobile || undefined,
+        },
       });
       if (error) throw new Error(data?.error || error.message || "Scrape failed");
       if (!data?.success) throw new Error(data?.error || "Scrape failed");
       setResult(data.data);
+      pushRecent(normalized);
+      setRecent(loadRecent());
       if (jobRow) await supabase.from("jobs").update({ status: "completed", result: data.data, credits_used: cost }).eq("id", jobRow.id);
       toast.success("Scrape complete");
     } catch (e: any) {
@@ -76,30 +106,72 @@ export default function Scrape() {
 
   return (
     <AppShell>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Scrape</h1>
-          <p className="text-muted-foreground text-sm mt-1">Extract clean content from a single URL in any format you need.</p>
-        </div>
+      <div className="relative">
+        <div className="absolute inset-x-0 top-0 h-64 bg-gradient-hero pointer-events-none" />
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-8">
+          <div className="mb-6 flex items-center gap-3 animate-fade-in">
+            <div className="h-10 w-10 rounded-xl bg-gradient-fire flex items-center justify-center shadow-glow">
+              <Globe className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Scrape</h1>
+              <p className="text-muted-foreground text-sm mt-0.5">One URL · any format · clean data in seconds.</p>
+            </div>
+          </div>
 
-        <div className="rounded-2xl border border-border bg-card shadow-elegant p-5 sm:p-6 space-y-5">
+        <div className="rounded-2xl border border-border bg-card shadow-elegant p-5 sm:p-6 space-y-5 animate-fade-in">
           <div className="flex items-center gap-2 rounded-xl border border-border bg-background p-2 pl-4">
             <Globe className="h-5 w-5 text-muted-foreground" />
             <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com"
-              className="border-0 shadow-none focus-visible:ring-0 h-11 bg-transparent" />
+              className="border-0 shadow-none focus-visible:ring-0 h-11 bg-transparent"
+              onKeyDown={(e) => { if (e.key === "Enter") run(); }} />
+            {url && (
+              <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setUrl("")} aria-label="Clear">
+                <X className="h-4 w-4" />
+              </Button>
+            )}
             <Button onClick={run} disabled={loading} className="h-11 px-5 bg-gradient-fire text-primary-foreground hover:opacity-95 rounded-lg">
               {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Scraping…</> : <>Scrape · {cost} cr</>}
             </Button>
           </div>
 
+          {recent.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground self-center mr-1">Recent</span>
+              {recent.map((r) => (
+                <button key={r} onClick={() => setUrl(r)}
+                  className="text-xs px-2.5 py-1 rounded-full border border-border bg-background hover:border-primary/40 hover:bg-primary/5 transition truncate max-w-[220px]">
+                  {r.replace(/^https?:\/\//, "")}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Formats</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Quick presets</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {PRESETS.map((p) => (
+                <button key={p.id} onClick={() => applyPreset(p)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-border bg-background hover:border-primary/60 hover:bg-primary/5 transition">
+                  <p.icon className="h-3.5 w-3.5 text-primary" />
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Formats</Label>
+              <Badge variant="secondary" className="text-[10px]">{cost} credit{cost === 1 ? "" : "s"} total</Badge>
+            </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
               {FORMATS.map((f) => {
                 const active = formats.includes(f.id);
                 return (
-                  <label key={f.id} className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition ${active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                  <label key={f.id} className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition hover-scale ${active ? "border-primary bg-primary/5 shadow-elegant" : "border-border hover:border-primary/40"}`}>
                     <Checkbox checked={active} onCheckedChange={() => toggleFormat(f.id)} className="mt-0.5" />
+                    <f.icon className={`h-4 w-4 mt-0.5 ${active ? "text-primary" : "text-muted-foreground"}`} />
                     <div className="flex-1">
                       <div className="text-sm font-medium">{f.label}</div>
                       <div className="text-xs text-muted-foreground">{f.desc}</div>
@@ -115,13 +187,30 @@ export default function Scrape() {
             Advanced options
           </button>
           {showAdvanced && (
-            <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="rounded-lg border border-border p-4 space-y-4 animate-fade-in">
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Only main content</Label>
                   <p className="text-xs text-muted-foreground">Strip nav, footer and chrome.</p>
                 </div>
                 <Switch checked={onlyMain} onCheckedChange={setOnlyMain} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <Label>Mobile viewport</Label>
+                    <p className="text-xs text-muted-foreground">Render the page as a mobile device.</p>
+                  </div>
+                </div>
+                <Switch checked={mobile} onCheckedChange={setMobile} />
+              </div>
+              <div>
+                <Label className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> Wait for (ms)</Label>
+                <Input type="number" min={0} max={30000} step={250} value={waitFor}
+                  onChange={(e) => setWaitFor(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0" className="mt-1 h-9" />
+                <p className="text-xs text-muted-foreground mt-1">Useful for SPAs that load content after JS. Max 30s.</p>
               </div>
               <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground flex gap-2">
                 <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
@@ -133,13 +222,14 @@ export default function Scrape() {
 
         {loading && <ResultsSkeleton />}
         {result && <ResultsView result={result} url={url} />}
+        </div>
       </div>
     </AppShell>
   );
 }
 
 const ResultsSkeleton = () => (
-  <div className="mt-6 rounded-2xl border border-border bg-card p-6 space-y-3">
+  <div className="mt-6 rounded-2xl border border-border bg-card p-6 space-y-3 animate-fade-in">
     <Skeleton className="h-6 w-1/3" />
     <Skeleton className="h-4 w-full" />
     <Skeleton className="h-4 w-5/6" />
