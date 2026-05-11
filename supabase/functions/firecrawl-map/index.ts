@@ -27,8 +27,11 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: data?.error || `Firecrawl ${fcRes.status}` }),
         { status: fcRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const links: string[] = data?.links || data?.data?.links || [];
-    return new Response(JSON.stringify({ success: true, links, count: links.length }),
+    const raw = data?.links || data?.data?.links || [];
+    const items = raw.map((l: any) =>
+      typeof l === "string" ? { url: l } : { url: l.url, title: l.title, description: l.description }
+    );
+    return new Response(JSON.stringify({ success: true, links: items, count: items.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: e instanceof Error ? e.message : String(e) }),
