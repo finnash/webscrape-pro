@@ -11,6 +11,7 @@ import Scrape from "./pages/Scrape";
 import SearchPage from "./pages/Search";
 import BrowserSessions from "./pages/Browser";
 import Jobs from "./pages/Jobs";
+import MapPage from "./pages/Map";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 
@@ -30,7 +31,7 @@ const App = () => (
               <Route path="/scrape" element={<Scrape />} />
               <Route path="/jobs" element={<Jobs />} />
             <Route path="/search" element={<SearchPage />} />
-              <Route path="/map" element={<ComingSoon title="Map" description="Discover every URL on a website in seconds." />} />
+              <Route path="/map" element={<MapPage />} />
               <Route path="/crawl" element={<ComingSoon title="Crawl" description="Recursively scrape entire sites with smart depth controls." />} />
               <Route path="/extract" element={<ComingSoon title="Extract" description="LLM-powered structured data extraction with schemas." />} />
               <Route path="/parse" element={<ComingSoon title="Parse PDF" description="Turn PDFs and documents into clean structured text." />} />

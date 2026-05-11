@@ -4,6 +4,7 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { Button } from "@/components/ui/button";
+import { AssistantDock } from "@/components/AssistantDock";
 import {
   LayoutDashboard, Globe, Search, Map as MapIcon, Layers, Sparkles,
   FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut,
@@ -100,6 +101,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           </NavLink>
         </nav>
       </div>
+      <AssistantDock />
     </div>
   );
 };
