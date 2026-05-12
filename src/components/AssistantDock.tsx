@@ -20,13 +20,21 @@ export const AssistantDock = () => {
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: `${SUPABASE_URL}/functions/v1/ai-assistant`,
-      body: () => ({ conversationId: conversationIdRef.current }),
       fetch: async (url, init) => {
         const { data: { session } } = await supabase.auth.getSession();
         const headers = new Headers(init?.headers);
         if (session?.access_token) headers.set("Authorization", `Bearer ${session.access_token}`);
         headers.set("apikey", import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string);
-        const res = await fetch(url, { ...init, headers });
+        // Inject conversationId into the JSON body
+        let body = init?.body;
+        if (typeof body === "string") {
+          try {
+            const parsed = JSON.parse(body);
+            parsed.conversationId = conversationIdRef.current;
+            body = JSON.stringify(parsed);
+          } catch {}
+        }
+        const res = await fetch(url, { ...init, headers, body });
         const cid = res.headers.get("x-conversation-id");
         if (cid) conversationIdRef.current = cid;
         return res;
