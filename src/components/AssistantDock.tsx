@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, X, Send, Loader2, ChevronDown, Wrench } from "lucide-react";
+import { Sparkles, X, Send, Loader2, ChevronDown, Wrench, Maximize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,17 +14,22 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 export const AssistantDock = () => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
+  const conversationIdRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: `${SUPABASE_URL}/functions/v1/ai-assistant`,
+      body: () => ({ conversationId: conversationIdRef.current }),
       fetch: async (url, init) => {
         const { data: { session } } = await supabase.auth.getSession();
         const headers = new Headers(init?.headers);
         if (session?.access_token) headers.set("Authorization", `Bearer ${session.access_token}`);
         headers.set("apikey", import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string);
-        return fetch(url, { ...init, headers });
+        const res = await fetch(url, { ...init, headers });
+        const cid = res.headers.get("x-conversation-id");
+        if (cid) conversationIdRef.current = cid;
+        return res;
       },
     }),
   });
@@ -63,12 +69,19 @@ export const AssistantDock = () => {
           </div>
           <div>
             <div className="text-sm font-semibold leading-tight">Firecrawl AI</div>
-            <div className="text-[10px] text-muted-foreground">Scrape · Search · Map — by chat</div>
+            <div className="text-[10px] text-muted-foreground">Gemini 3 Flash · scrape · search · map</div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="Open full chat">
+            <Link to={conversationIdRef.current ? `/assistant/${conversationIdRef.current}` : "/assistant"}>
+              <Maximize2 className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
