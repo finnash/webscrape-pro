@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { NavLink, Navigate } from "react-router-dom";
+import { NavLink, Navigate, useLocation } from "react-router-dom";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AssistantDock } from "@/components/AssistantDock";
 import {
   LayoutDashboard, Globe, Search, Map as MapIcon, Layers, Sparkles,
-  FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut,
+  FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut, MessageSquare,
 } from "lucide-react";
 
 const nav = [
@@ -15,6 +15,7 @@ const nav = [
   { to: "/scrape", label: "Scrape", icon: Globe, ready: true },
   { to: "/search", label: "Search", icon: Search, ready: true },
   { to: "/map", label: "Map", icon: MapIcon },
+  { to: "/assistant", label: "AI Assistant", icon: MessageSquare, ready: true },
   { to: "/crawl", label: "Crawl", icon: Layers },
   { to: "/extract", label: "Extract", icon: Sparkles },
   { to: "/parse", label: "Parse PDF", icon: FileText },
@@ -25,6 +26,8 @@ const nav = [
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const { user, loading, signOut } = useAuth();
   const { theme, toggle } = useTheme();
+  const location = useLocation();
+  const onAssistant = location.pathname.startsWith("/assistant");
 
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
@@ -101,7 +104,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           </NavLink>
         </nav>
       </div>
-      <AssistantDock />
+      {!onAssistant && <AssistantDock />}
     </div>
   );
 };
