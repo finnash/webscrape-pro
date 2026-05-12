@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AssistantDock } from "@/components/AssistantDock";
 import {
   LayoutDashboard, Globe, Search, Map as MapIcon, Layers, Sparkles,
-  FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut,
+  FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut, MessageSquare,
 } from "lucide-react";
 
 const nav = [
@@ -15,6 +15,7 @@ const nav = [
   { to: "/scrape", label: "Scrape", icon: Globe, ready: true },
   { to: "/search", label: "Search", icon: Search, ready: true },
   { to: "/map", label: "Map", icon: MapIcon },
+  { to: "/assistant", label: "AI Assistant", icon: MessageSquare, ready: true },
   { to: "/crawl", label: "Crawl", icon: Layers },
   { to: "/extract", label: "Extract", icon: Sparkles },
   { to: "/parse", label: "Parse PDF", icon: FileText },
