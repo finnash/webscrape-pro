@@ -14,6 +14,7 @@ import Jobs from "./pages/Jobs";
 import MapPage from "./pages/Map";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
+import Assistant from "./pages/Assistant";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,8 @@ const App = () => (
               <Route path="/extract" element={<ComingSoon title="Extract" description="LLM-powered structured data extraction with schemas." />} />
               <Route path="/parse" element={<ComingSoon title="Parse PDF" description="Turn PDFs and documents into clean structured text." />} />
             <Route path="/browser" element={<BrowserSessions />} />
+              <Route path="/assistant" element={<Assistant />} />
+              <Route path="/assistant/:threadId" element={<Assistant />} />
               <Route path="/settings" element={<ComingSoon title="Settings" description="Account preferences and API key management." />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
