@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { NavLink, Navigate } from "react-router-dom";
+import { NavLink, Navigate, useLocation } from "react-router-dom";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -26,6 +26,8 @@ const nav = [
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const { user, loading, signOut } = useAuth();
   const { theme, toggle } = useTheme();
+  const location = useLocation();
+  const onAssistant = location.pathname.startsWith("/assistant");
 
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
@@ -102,7 +104,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           </NavLink>
         </nav>
       </div>
-      <AssistantDock />
+      {!onAssistant && <AssistantDock />}
     </div>
   );
 };
