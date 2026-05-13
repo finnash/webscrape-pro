@@ -64,3 +64,15 @@ Build a **native, beautiful, pro-grade UI** on top of the Firecrawl API that is 
 - Dark theme, Firecrawl-inspired but original.
 
 _This file is the contract. If a change conflicts with it, update this file first._
+---
+
+## Firecrawl as Orchestrated Substrate (added 2026-05-13)
+
+Raw Firecrawl endpoints, called directly with default settings, produce noisy and generic results — markdown bloated with nav, weak summaries, untargeted search results. Firecrawl is a great primitive but a poor product on its own.
+
+This platform's core thesis: **Firecrawl is the substrate, our agent is the product.** Every endpoint is wrapped by:
+1. **Tuned system instructions** per endpoint (Scrape preset for LLM-readiness, Search preset for SERP precision, etc.).
+2. **An AI orchestrator** (`ai-assistant` edge function, Gemini 3 Flash) that chains tools — `search_web` → `scrape_url` → summarize — instead of one-shot calls.
+3. **Snapshots** — the highest-level abstraction. A Snapshot is a named, repeatable agent recipe (Medium pull, Reddit sweep, Leads finder) with fixed params, a step graph, and packaged deliverables (MD/CSV/JSON/screenshots/PDF).
+
+When users want results, they reach for a Snapshot. When they want exploration, they chat the Assistant. When they want low-level control, they use the dedicated endpoint pages. All three layers route through the same hardened edge functions.

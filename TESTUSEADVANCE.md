@@ -198,3 +198,60 @@ Each test: **Goal · Steps · Expected · Pass criteria.** Work top-to-bottom.
 ---
 
 _Last updated: v0.7 — May 12, 2026._
+---
+
+## Set 2 — Source-Specific Mastery (Reddit, Medium, Research)
+
+Goal: prove the Assistant can extract clean, structured content from the three sources you scrape most. Each test is a single Assistant prompt. Pass = the output matches "Expected".
+
+### 2.1 Single Reddit Thread Extraction
+- **Goal:** Get OP body + top comments from one Reddit thread URL.
+- **Prompt:** `Scrape this Reddit thread and give me the OP post + the top 5 comments verbatim with author handles: https://old.reddit.com/r/MachineLearning/comments/<id>/...`
+- **Expected:** Markdown with `## OP` block then `## Top Comments` list of 5, each with `**u/author**` and the comment body.
+- **Pass:** No nav/sidebar text leaks. Comment count ≥ 5 if available.
+
+### 2.2 Reddit Subreddit Sweep
+- **Goal:** Discover hot threads on a topic across a subreddit.
+- **Prompt:** `Search r/SaaS for threads from the last week about "cold email tools", scrape the top 5, and summarize what people recommend most.`
+- **Expected:** Numbered list of 5 threads (title, url) + a "Most-recommended tools" summary at the end.
+- **Pass:** Tool calls visible: 1× `search_web`, 5× `scrape_url`. Final summary cites at least 3 threads.
+
+### 2.3 Medium Blog Discovery + Pull
+- **Goal:** Find Medium articles by keyword and pull their content.
+- **Prompt:** `Find 10 Medium articles about "OpenFlop" and give me a CSV-style table with title, author, url, and a 2-sentence summary for each.`
+- **Expected:** A markdown table with 10 rows. Each summary is content-aware (not just the meta description).
+- **Pass:** Search uses `site:medium.com`. Scrape calls return `summary` field, not raw HTML.
+
+### 2.4 Research Paper Extraction (arXiv)
+- **Goal:** Pull structured data from an academic paper page.
+- **Prompt:** `Scrape https://arxiv.org/abs/<id> and give me: title, authors, abstract, key contributions (3-5 bullets), and the first 5 references.`
+- **Expected:** Headed sections with the exact requested fields populated.
+- **Pass:** Author list non-empty, contributions are paraphrased (not copy-pasted abstract).
+
+### 2.5 Multi-Source Tone Comparison
+- **Goal:** Same topic across Reddit + Medium + a personal blog — compare tone.
+- **Prompt:** `For "vector databases in 2026": find 1 Reddit thread, 1 Medium article, and 1 indie blog post. Scrape each and give me a 3-column tone-comparison table (formality, technical depth, recommended tool).`
+- **Expected:** A 3-column markdown table.
+- **Pass:** Three different domains visible in the tool calls. Table cells are distinct (not identical placeholder text).
+
+---
+
+## Set 6 — Snapshots (Repeatable Workflows)
+
+Snapshots live at `/snapshots`. Tests assume the executor is wired (phase 2). For now treat these as smoke tests of the UI + recipe display.
+
+### 6.1 Run Built-in: Medium Blogs
+- Open `/snapshots` → "Medium Blogs by Keyword" → Run.
+- **Pass:** Recipe dialog shows 3 steps (`search_web`, `scrape_url`, `summarize`) and a credit estimate.
+
+### 6.2 Run Built-in: Reddit Threads
+- Same flow, "Reddit Thread Sweep".
+- **Pass:** Recipe references `site:old.reddit.com`.
+
+### 6.3 Run Built-in: Leads Finder
+- Same flow, "Leads Finder (People in Need)".
+- **Pass:** Recipe lists 4 parallel search queries (Reddit / Facebook groups / Craigslist / Yelp).
+
+### 6.4 Create + Run a Custom Snapshot
+- Click "Create snapshot" → name "X Influencers", kind `custom`, params `{ "topic": "" }`, recipe `[ { "tool": "search_web", "args": { "query": "site:x.com {topic}", "limit": 15 } } ]`, deliverables `markdown,json` → Save.
+- **Pass:** Card appears under "Your snapshots". Run shows your recipe in the dialog. Delete works.

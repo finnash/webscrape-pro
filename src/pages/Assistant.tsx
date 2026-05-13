@@ -218,17 +218,27 @@ function ChatWindow({
     transport,
   });
 
-  // Auto-prefill from query param (when starting from landing)
+  // Auto-prefill from query param (when starting from landing). Guarded so it
+  // fires exactly once and surfaces failures via toast instead of silently
+  // leaving a blank screen.
+  const prefillFiredRef = useRef(false);
   useEffect(() => {
+    if (prefillFiredRef.current) return;
     const url = new URL(window.location.href);
     const prefill = url.searchParams.get("prefill");
-    if (prefill && messages.length === 0) {
-      sendMessage({ text: prefill });
-      url.searchParams.delete("prefill");
-      window.history.replaceState({}, "", url.toString());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!prefill) return;
+    if (messages.length > 0) { prefillFiredRef.current = true; return; }
+    prefillFiredRef.current = true;
+    url.searchParams.delete("prefill");
+    window.history.replaceState({}, "", url.toString());
+    Promise.resolve(sendMessage({ text: prefill })).catch((err: any) => {
+      toast({
+        title: "Couldn't start the chat",
+        description: err?.message || "The assistant didn't respond. Try again.",
+        variant: "destructive",
+      });
+    });
+  }, [messages.length, sendMessage]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -267,6 +277,11 @@ function ChatWindow({
           })}
           {status === "submitted" && (
             <div className="text-sm text-shimmer font-medium">Thinking…</div>
+          )}
+          {messages.length === 0 && !isWorking && !error && (
+            <div className="text-xs text-muted-foreground border border-dashed border-border rounded-xl p-4 text-center">
+              Ready when you are. Ask anything web-related — I'll use the scrape, search, and map tools.
+            </div>
           )}
           {error && (
             <div className="text-xs text-destructive border border-destructive/30 bg-destructive/5 rounded-lg p-2">

@@ -13,15 +13,19 @@ const FC = "https://api.firecrawl.dev/v2";
 
 async function firecrawl(path: string, body: unknown) {
   const key = Deno.env.get("FIRECRAWL_API_KEY");
-  if (!key) throw new Error("FIRECRAWL_API_KEY not configured");
-  const r = await fetch(`${FC}${path}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error || `Firecrawl ${r.status}`);
-  return j?.data ?? j;
+  if (!key) return { ok: false, error: "FIRECRAWL_API_KEY not configured" };
+  try {
+    const r = await fetch(`${FC}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: j?.error || `Firecrawl ${r.status}` };
+    return { ok: true, data: j?.data ?? j };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 function compactMd(md: string | undefined, max = 3500) {
@@ -54,9 +58,15 @@ Deno.serve(async (req) => {
     }
     const userId = userData.user.id;
 
-    const body = await req.json();
-    const messages: UIMessage[] = body.messages || [];
-    let conversationId: string | null = body.conversationId || null;
+    const body = await req.json().catch(() => ({}));
+    const messages: UIMessage[] = Array.isArray(body?.messages) ? body.messages : [];
+    let conversationId: string | null = body?.conversationId || null;
+    if (messages.length === 0) {
+      return new Response(JSON.stringify({ error: "messages array is required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    console.log("ai-assistant: user", userId, "conv", conversationId, "msgs", messages.length);
 
     // Create conversation if missing
     if (!conversationId) {
@@ -108,11 +118,14 @@ Deno.serve(async (req) => {
           formats: z.array(z.enum(["markdown", "html", "links", "summary", "screenshot"])).optional(),
         }),
         execute: async ({ url, formats }) => {
-          const data = await firecrawl("/scrape", {
+          console.log("tool scrape_url:", url);
+          const r = await firecrawl("/scrape", {
             url,
             formats: formats?.length ? formats : ["markdown", "summary"],
             onlyMainContent: true,
           });
+          if (!r.ok) return { error: r.error, url };
+          const data = r.data;
           return {
             url,
             title: data?.metadata?.title,
@@ -129,7 +142,10 @@ Deno.serve(async (req) => {
           limit: z.number().int().min(1).max(15).optional(),
         }),
         execute: async ({ query, limit }) => {
-          const data = await firecrawl("/search", { query, limit: limit ?? 8 });
+          console.log("tool search_web:", query);
+          const r = await firecrawl("/search", { query, limit: limit ?? 8 });
+          if (!r.ok) return { error: r.error, query, results: [] };
+          const data = r.data;
           const list = Array.isArray(data) ? data : (data?.web || data?.results || []);
           return {
             query,
@@ -147,7 +163,10 @@ Deno.serve(async (req) => {
           limit: z.number().int().min(1).max(500).optional(),
         }),
         execute: async ({ url, search, limit }) => {
-          const data = await firecrawl("/map", { url, search, limit: limit ?? 100 });
+          console.log("tool map_site:", url);
+          const r = await firecrawl("/map", { url, search, limit: limit ?? 100 });
+          if (!r.ok) return { error: r.error, url, links: [] };
+          const data = r.data;
           const links = data?.links || data || [];
           return { url, count: links.length, links: links.slice(0, limit ?? 100) };
         },

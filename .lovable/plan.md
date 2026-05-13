@@ -1,77 +1,100 @@
-# Plan — Full-page AI Assistant + Persistence + Docs
+# Plan — Chat fix + Snapshots system + Docs
 
-## 1. Full-page Assistant experience (`/assistant/:threadId?`)
-- New route `src/pages/Assistant.tsx` mounted in `App.tsx` at `/assistant` and `/assistant/:threadId`. Lives inside `AppShell` so the sidebar/nav remain available.
-- Three-pane layout (responsive: collapse to drawer at <768px):
-  - **Left rail** — thread list (title, last activity, delete). "+ New chat" button at top. Search input.
-  - **Center** — message list. Sticky composer at bottom (multiline `PromptInputTextarea` + send). Auto-scroll, focus-on-mount, focus after send.
-  - **Right rail (md+)** — "Tool activity" panel showing the live tool-call cards expanded for the active message (kept compact in the message stream).
-- Reuse the shimmer streaming text, glass-card aesthetic, and tool-call cards from `AssistantDock`. Keep the floating dock too — clicking it now opens `/assistant` (or its expand button does); the dock continues to work for quick asks on other pages.
-- Routing: `/assistant` selects the most recent thread (or creates one and navigates). `/assistant/:threadId` keys the chat by `threadId` (`useChat({ id: threadId, messages: initialMessages, transport })`). Switching threads = navigate.
-- Animations preserved: fade-in for new messages, shimmer sweep on streaming tokens, skeletons while initial messages load.
+## 1. Fix: AI Assistant goes blank after clicking a preset
 
-## 2. Persistent chat history (per-user, DB-backed)
-Tables already exist (`chat_conversations`, `chat_messages`, RLS by `user_id`). We will:
-- **Server (`ai-assistant` edge fn)**:
-  - Switch `verify_jwt` back on (remove the override in `supabase/config.toml`) so we can read `auth.uid()` from the JWT in the function.
-  - Accept `{ messages, conversationId }` in the POST body. If no `conversationId`, create a new `chat_conversations` row (title = first 60 chars of first user message) and return its id via response header `x-conversation-id`.
-  - Use `toUIMessageStreamResponse({ originalMessages, onFinish })` to persist the final assistant `UIMessage` (and the new user message if not already saved) into `chat_messages` with `role`, `parts` (jsonb), `user_id`, `conversation_id`. DB generates row `id`.
-  - Auto-title: after first assistant turn, if title is still "New chat", call gateway once (non-streaming, gemini-3-flash-preview) to generate a 4-6 word title and update the row.
-- **Client**:
-  - `useThreads()` hook → list/create/delete `chat_conversations` via supabase-js (RLS-scoped).
-  - On thread mount, fetch existing `chat_messages` ordered by `created_at`, run through `validateUIMessages`, pass as `messages` initial state to `useChat`.
-  - `DefaultChatTransport` body extender sends `conversationId`. After first send on a brand-new thread, read `x-conversation-id` from response and `navigate('/assistant/:id')`.
-- Floating `AssistantDock` reuses the same persistence so dock chats also appear in the full page history.
+### Root cause analysis
+Flow when clicking a preset on `/assistant`:
+1. `startNewChat` creates a `chat_conversations` row, then navigates to `/assistant/{id}?prefill=...`.
+2. `ChatWindow` mounts with empty `initialMessages` and runs the prefill effect → `sendMessage({ text: prefill })`.
+3. The edge function receives `conversationId` (already exists), tries to insert the user message, then streams.
 
-## 3. Model + tool-calling explanation (in-app + docs)
-- Continue using `google/gemini-3-flash-preview` via Lovable AI Gateway (Vercel AI SDK, OpenAI-compatible). Reasons surfaced to the user in `TESTUSEADVANCE.md`:
-  - Native tool/function calling, multi-step (`stopWhen: stepCountIs(50)`).
-  - ~600ms first-token, strong instruction following, good URL/JSON discipline → low hallucination on scraped output summaries.
-  - Free during current Lovable AI promo window, no key needed from user.
-- Document the three current tools (`scrape_url`, `search_web`, `map_site`) and accuracy notes (deterministic — they call Firecrawl directly; the LLM only orchestrates and summarizes).
-- Add a small "Powered by Gemini 3 Flash · 3 tools wired" caption under the Assistant header so users see this in-app.
+Likely failure points (all silent in current code):
+- The `prefill` effect runs on mount with `[]` deps and may fire before `useChat` is fully wired in some renders → the message is dropped without UI feedback.
+- If `streamText` / gateway returns a non-stream error (e.g. 402, 429, malformed tool call), the UI shows nothing because `error` rendering only fires when `useChat` receives a parsed error event. A Response with `status: 500` JSON body bypasses the stream parser and leaves the chat blank.
+- The edge function's `onFinish` persists the assistant message but throws if `parts` shape isn't valid jsonb — currently swallowed in a try/catch but the response can already be closed by then.
 
-## 4. Postmortem refresh (`POSTMORTEM.md` rewrite)
-Top-to-bottom audit covering:
-- ✅ **Done**: Auth (email + Google + allowlist), Scrape (redesigned UI, presets, recents, advanced), Search (filters, per-result scrape, exports), Browser (interactive iframe, scripted actions, live credit HUD), Map (server filter, exports), Jobs (RLS history + downloads), Credits (per-job + lifetime), Skeletons everywhere, AI Assistant (now full-page + persistent), Lovable AI tool-calling.
-- 🟡 **Partially done**: Assistant tools (only 3/6 endpoints wired — missing crawl/extract/parse).
-- ❌ **Not built yet**: **Crawl** (async polling + depth/include/exclude), **Extract** (schema builder + structured output), **Parse PDF** (file upload to storage + parse), **Cmd-K palette**, **Agent layer** on top of Browser, **Webhooks/notifications** on long jobs, **Concurrency/retry** on Scrape, **Team workspaces / shared history**.
-- ⚡ **Performance numbers** (measured): Scrape p50 3-5s, Search 2s, Map 1-3s, Browser launch 4-8s, Assistant first token ~600ms.
-- 🥊 **vs firecrawl.dev parity table** updated.
-- 📋 **Recommended next build order**: Crawl → Extract → Parse → Cmd-K → Agents.
+### Fix
+**Edge function (`supabase/functions/ai-assistant/index.ts`)**
+- Wrap firecrawl tool errors so they return as tool `output` instead of throwing — never let a tool exception kill the stream.
+- Add structured console logging at each step (auth ok, conv id, tool start/end, finish) so we can see what's happening in edge logs.
+- Ensure error responses always include `corsHeaders` and `x-conversation-id` (already partial).
+- Validate `messages` is a non-empty array before calling the gateway; return a clear 400 otherwise.
 
-## 5. New `TESTUSEADVANCE.md` (root of repo)
-A long, opinionated guide. Sections:
-1. **Why this beats firecrawl.dev** — private history, credit HUD, AI orchestration, presets, persistent browser sessions.
-2. **Pro prompting playbook** — for each tool (scrape/search/map) and the Assistant: what to ask, what NOT to ask, examples of good prompts vs weak prompts.
-3. **Advanced techniques**:
-   - Chaining: "Map site → pick top 10 by path → scrape each in markdown → summarize."
-   - Stealth: mobile UA + waitFor for JS-heavy SPAs.
-   - SEO audit preset walk-through.
-   - Using Browser actions for login walls, infinite scroll, cookie banners.
-   - Cost control: when to use summary-only vs full markdown, when to skip screenshots.
-4. **Reliability checklist** (10 items: URL normalize, RLS sanity, credit budget, etc.).
-5. **20-test progression** (5 sets × 4 tests, beginner → expert):
-   - Set 1 Beginner (scrape a static page, basic search, view jobs, download MD, run the assistant once).
-   - Set 2 Intermediate (search + scrape, mobile viewport, map a site, recent URLs).
-   - Set 3 Advanced (Browser scripted action chain, multi-format scrape, assistant chained tool call, export CSV + JSON).
-   - Set 4 Pro (long-form summarization via assistant, SEO audit preset, concurrent jobs, credit HUD verification).
-   - Set 5 Expert (multi-thread chat history reload test, persistent browser session re-entry, end-to-end "research → scrape → summarize" flow, regression sweep).
-   - Each test: **Goal · Steps · Expected · Pass criteria**.
-6. **Troubleshooting** table.
+**Frontend (`src/pages/Assistant.tsx`)**
+- Replace the "fire-and-forget" prefill `useEffect` with a guarded version that:
+  - Waits until `useChat` reports `status === "ready"` (or first render after mount completes).
+  - Catches `sendMessage` rejections and surfaces a toast.
+- Always render a visible status row beneath messages (Thinking… / Streaming… / Error / Idle) so the screen never appears blank.
+- If `messages.length === 0 && !isWorking && !prefillUsed`, show a small "Tap a suggestion to start" hint instead of empty whitespace.
 
-## Order of execution
-1. Migration: none needed (tables exist). Edit `supabase/config.toml` to re-enable JWT verify on `ai-assistant`.
-2. Update `supabase/functions/ai-assistant/index.ts` for auth + persistence + auto-title.
-3. Build `src/pages/Assistant.tsx` + `useThreads` hook + route wiring in `App.tsx` + sidebar entry in `AppShell.tsx`.
-4. Refactor `AssistantDock` to share persistence (small extraction of `useAssistantChat` hook).
-5. Rewrite `POSTMORTEM.md`.
-6. Write `TESTUSEADVANCE.md`.
+## 2. New feature: **Snapshots** (presets / repeatable scrape workflows)
 
-## Technical notes
-- `useChat` `id` MUST equal route `threadId` so reload restores the same thread.
-- Persisted `parts` use jsonb so tool-call parts (input/output/state) survive reload — cards re-render via existing `MessageRow`/`ToolCard`.
-- `validateUIMessages` runs on initial load to drop any bad rows safely.
-- Auto-title uses gateway in non-streaming mode; failure is non-fatal (keeps "New chat").
-- All DB writes go through the edge function with the user's JWT → RLS enforces ownership; client never writes `chat_messages` directly.
-- No design changes to existing pages; shimmer + skeletons preserved.
+### Concept
+A Snapshot is a reusable, named scraping workflow with:
+- A target source category (Medium, Reddit, Leads, Custom).
+- Fixed parameters (keywords, filters, formats).
+- Output deliverables (MD, CSV, JSON, screenshots, PDF).
+- An execution recipe — chain of Firecrawl + AI tool calls orchestrated by our agent (not raw Firecrawl).
+
+This makes Firecrawl behave like an orchestrator backed by our prompts, not a raw API.
+
+### Scope for this round (scaffold only — no full execution engine yet)
+- New route `/snapshots` and sidebar entry "Snapshots" (with `Camera`/`Layers` icon).
+- DB tables: `snapshots` (id, user_id, name, kind, params jsonb, recipe jsonb, deliverables text[], created_at) and `snapshot_runs` (id, snapshot_id, user_id, status, result jsonb, credits_used, created_at). RLS scoped to user.
+- `src/pages/Snapshots.tsx`:
+  - Grid of snapshot cards (name, kind badge, last run, "Run" + "Edit" buttons).
+  - "Create snapshot" button → modal with form (name, kind selector, JSON params editor, deliverables checkboxes). Save inserts a row.
+  - Three **starter (built-in) snapshots** seeded from code (not DB): Medium Blogs, Reddit Threads, Leads Finder. Shown above the user's own snapshots.
+- Built-in snapshot definitions live in `src/lib/snapshots.ts` as typed objects:
+  - `medium-blogs`: input `{ keyword, limit }`. Recipe: `search_web("site:medium.com {keyword}")` → for each result `scrape_url(url, formats:[markdown,summary])` → emit MD + CSV (title, url, author, summary).
+  - `reddit-threads`: input `{ subreddit?, query, limit, timeframe }`. Recipe: `search_web("site:reddit.com {query} ...")` → scrape each thread → emit MD + JSON (title, url, OP body, top comments).
+  - `leads-finder`: input `{ niche, region, intent }`. Recipe: parallel `search_web` over Reddit/X/Facebook/Yelp/Craigslist with intent keywords ("looking for", "need help with", "recommend a") → scrape promising results → AI-summarize each into a lead card (who, where, ask, contact hint, why-fit).
+- "Run" only opens a stub dialog showing the recipe and an "Execution engine coming next" notice — wiring the runner is phase 2 (will use the existing `ai-assistant` agent + new tool `run_snapshot_step`).
+
+### Why scaffold-first
+You said you don't expect everything in one go. This locks in shape, DB, and UI; later turns build the executor + per-snapshot result viewers.
+
+## 3. Docs updates
+
+### `context.md`
+Append a new section **"Firecrawl as Orchestrated Substrate"** stating: Raw Firecrawl endpoints produce noisy/generic results. Our platform wraps every endpoint with tuned system prompts + an AI orchestrator (Gemini 3 Flash) that chains tools, filters, summarizes, and packages outputs. Snapshots are the highest-level abstraction — repeatable agentic recipes.
+
+### `TESTUSEADVANCE.md`
+Add **Set 2 — Source-Specific Mastery (5 tests)**:
+- 2.1 Reddit thread + top-comment extraction (single thread URL)
+- 2.2 Reddit subreddit hot-topic sweep (search-then-scrape)
+- 2.3 Medium blog discovery + content pull by keyword
+- 2.4 Research paper extraction (arxiv/abstract + sections + references)
+- 2.5 Multi-source comparison (same topic, Reddit vs Medium vs blog tone diff)
+Each test: Goal / Steps (assistant prompts to paste) / Expected output / Pass criteria.
+
+Also add **Set 6 — Snapshots (4 tests)**: run Medium snapshot, run Reddit snapshot, run Leads snapshot, create + run a custom snapshot.
+
+## 4. Medium / Reddit / Leads — how it works (will be explained in chat reply, not just docs)
+
+Short version delivered in the assistant text reply after plan approval:
+- **Medium**: `search_web` with `site:medium.com {keyword}` (Firecrawl Search returns Google-quality SERP) → top N URLs → parallel `scrape_url` with `onlyMainContent:true, formats:[markdown,summary]` → assemble into a single MD bundle + CSV index.
+- **Reddit**: same shape but `site:reddit.com/r/{sub}` and we keep comment markdown (Reddit's old.reddit pages render cleaner — snapshot will rewrite URLs to `old.reddit.com`).
+- **Leads**: orchestrated multi-query search across Reddit/X/Facebook/Craigslist/Yelp using intent phrases. AI ranks each result by buying-intent score and outputs a lead card.
+
+## Files to create/modify
+
+**Create**
+- `src/pages/Snapshots.tsx`
+- `src/lib/snapshots.ts` (built-in snapshot definitions + types)
+- `src/components/snapshots/SnapshotCard.tsx`
+- `src/components/snapshots/CreateSnapshotDialog.tsx`
+- New migration: `snapshots` + `snapshot_runs` tables with RLS
+
+**Modify**
+- `supabase/functions/ai-assistant/index.ts` (resilient tool errors + logging + 400 validation)
+- `src/pages/Assistant.tsx` (guarded prefill, visible status row, error toast)
+- `src/components/layout/AppShell.tsx` (sidebar entry)
+- `src/App.tsx` (route)
+- `context.md` (orchestrator philosophy)
+- `TESTUSEADVANCE.md` (Set 2 + Set 6)
+
+## Out of scope this round
+- Actual snapshot execution engine (next round, after we validate UI shape).
+- Real CSV/PDF export pipeline for snapshot results (next round).
+- People-in-Need live data feed — only the snapshot definition + UI now.

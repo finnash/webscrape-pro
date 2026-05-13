@@ -15,6 +15,7 @@ import MapPage from "./pages/Map";
 import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 import Assistant from "./pages/Assistant";
+import Snapshots from "./pages/Snapshots";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/browser" element={<BrowserSessions />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/assistant/:threadId" element={<Assistant />} />
+              <Route path="/snapshots" element={<Snapshots />} />
               <Route path="/settings" element={<ComingSoon title="Settings" description="Account preferences and API key management." />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
