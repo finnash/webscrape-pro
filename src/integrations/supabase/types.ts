@@ -166,6 +166,81 @@ export type Database = {
         }
         Relationships: []
       }
+      snapshot_runs: {
+        Row: {
+          created_at: string
+          credits_used: number | null
+          error: string | null
+          id: string
+          result: Json | null
+          snapshot_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number | null
+          error?: string | null
+          id?: string
+          result?: Json | null
+          snapshot_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number | null
+          error?: string | null
+          id?: string
+          result?: Json | null
+          snapshot_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      snapshots: {
+        Row: {
+          created_at: string
+          deliverables: string[]
+          description: string | null
+          id: string
+          kind: string
+          name: string
+          params: Json
+          recipe: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deliverables?: string[]
+          description?: string | null
+          id?: string
+          kind: string
+          name: string
+          params?: Json
+          recipe?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deliverables?: string[]
+          description?: string | null
+          id?: string
+          kind?: string
+          name?: string
+          params?: Json
+          recipe?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
