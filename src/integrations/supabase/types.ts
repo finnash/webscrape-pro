@@ -171,9 +171,16 @@ export type Database = {
           created_at: string
           credits_used: number | null
           error: string | null
+          finished_at: string | null
           id: string
+          kind: string | null
+          name: string | null
+          params: Json
+          progress: Json
+          recipe: Json
           result: Json | null
-          snapshot_id: string
+          snapshot_id: string | null
+          started_at: string | null
           status: string
           updated_at: string
           user_id: string
@@ -182,9 +189,16 @@ export type Database = {
           created_at?: string
           credits_used?: number | null
           error?: string | null
+          finished_at?: string | null
           id?: string
+          kind?: string | null
+          name?: string | null
+          params?: Json
+          progress?: Json
+          recipe?: Json
           result?: Json | null
-          snapshot_id: string
+          snapshot_id?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -193,9 +207,16 @@ export type Database = {
           created_at?: string
           credits_used?: number | null
           error?: string | null
+          finished_at?: string | null
           id?: string
+          kind?: string | null
+          name?: string | null
+          params?: Json
+          progress?: Json
+          recipe?: Json
           result?: Json | null
-          snapshot_id?: string
+          snapshot_id?: string | null
+          started_at?: string | null
           status?: string
           updated_at?: string
           user_id?: string
