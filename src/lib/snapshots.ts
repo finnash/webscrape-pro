@@ -28,15 +28,15 @@ export const BUILTIN_SNAPSHOTS: SnapshotDef[] = [
     name: "Medium Blogs by Keyword",
     kind: "medium",
     description:
-      "Discover the top N Medium articles for a keyword and pull clean markdown + a CSV index (title, url, author, summary).",
+      "Discover the top N Medium articles for a keyword, scrape clean markdown (auto-falls back to Wayback Machine for paywalled posts), and produce rich blog cards + MD/CSV/JSON exports.",
     paramsSchema: [
       { key: "keyword", label: "Keyword / topic", type: "string", required: true, placeholder: "OpenFlop" },
-      { key: "limit", label: "How many articles", type: "number", default: 10 },
+      { key: "limit", label: "How many articles (1-50)", type: "number", default: 15 },
     ],
     recipe: [
-      { tool: "search_web", args: { query: "site:medium.com {keyword}", limit: 10 } },
+      { tool: "search_web", args: { query: "site:medium.com {keyword}", limit: 15 } },
       { tool: "scrape_url", args: { url: "$each", formats: ["markdown", "summary"] } },
-      { tool: "summarize", args: { instruction: "Group by author, extract key takeaways per article, output a CSV index + a single MD bundle." } },
+      { tool: "summarize", args: { instruction: "For each article, output: title, author, URL, 3-bullet key takeaways, notable quotes, and overall theme grouping. End with a 'Top 5 must-reads' section ranked by depth & originality." } },
     ],
     deliverables: ["markdown", "csv", "json"],
     estimatedCredits: (p) => (Number(p.limit) || 10) * 2 + 1,
