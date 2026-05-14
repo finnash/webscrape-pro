@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SnapshotCard } from "@/components/snapshots/SnapshotCard";
 import { CreateSnapshotDialog } from "@/components/snapshots/CreateSnapshotDialog";
 import { RunDrawer } from "@/components/snapshots/RunDrawer";
-import { BUILTIN_SNAPSHOTS, findBuiltin, type SnapshotDef } from "@/lib/snapshots";
+import { BUILTIN_SNAPSHOTS, type SnapshotDef } from "@/lib/snapshots";
 import { supabase } from "@/integrations/supabase/client";
 import { Camera, Plus, Trash2, History, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
