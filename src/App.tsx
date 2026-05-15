@@ -16,6 +16,9 @@ import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 import Assistant from "./pages/Assistant";
 import Snapshots from "./pages/Snapshots";
+import Crawl from "./pages/Crawl";
+import Extract from "./pages/Extract";
+import ParsePdf from "./pages/ParsePdf";
 
 const queryClient = new QueryClient();
 
@@ -34,9 +37,9 @@ const App = () => (
               <Route path="/jobs" element={<Jobs />} />
             <Route path="/search" element={<SearchPage />} />
               <Route path="/map" element={<MapPage />} />
-              <Route path="/crawl" element={<ComingSoon title="Crawl" description="Recursively scrape entire sites with smart depth controls." />} />
-              <Route path="/extract" element={<ComingSoon title="Extract" description="LLM-powered structured data extraction with schemas." />} />
-              <Route path="/parse" element={<ComingSoon title="Parse PDF" description="Turn PDFs and documents into clean structured text." />} />
+              <Route path="/crawl" element={<Crawl />} />
+              <Route path="/extract" element={<Extract />} />
+              <Route path="/parse" element={<ParsePdf />} />
             <Route path="/browser" element={<BrowserSessions />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/assistant/:threadId" element={<Assistant />} />

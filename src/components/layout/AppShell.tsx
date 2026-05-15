@@ -17,9 +17,9 @@ const nav = [
   { to: "/map", label: "Map", icon: MapIcon },
   { to: "/assistant", label: "AI Assistant", icon: MessageSquare, ready: true },
   { to: "/snapshots", label: "Snapshots", icon: Camera, ready: true },
-  { to: "/crawl", label: "Crawl", icon: Layers },
-  { to: "/extract", label: "Extract", icon: Sparkles },
-  { to: "/parse", label: "Parse PDF", icon: FileText },
+  { to: "/crawl", label: "Crawl", icon: Layers, ready: true },
+  { to: "/extract", label: "Extract", icon: Sparkles, ready: true },
+  { to: "/parse", label: "Parse PDF", icon: FileText, ready: true },
   { to: "/browser", label: "Browser", icon: Monitor, ready: true },
   { to: "/jobs", label: "Jobs", icon: ListChecks },
 ];
