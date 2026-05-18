@@ -63,6 +63,19 @@ function paywallSignals(md: string | undefined) {
 async function archiveCascade(url: string, log: (msg: string) => Promise<void>) {
   const candidates: { label: string; url: string }[] = [];
 
+  const isMedium = /(?:^|\/\/)([^/]*\.)?medium\.com\//i.test(url) ||
+    /\/\/[^/]+\/[^/]*@[^/]+\//.test(url); // medium custom domains use /@author/ pattern
+
+  // For Medium: Freedium first (purpose-built bypass), then archive.ph, then Wayback.
+  if (isMedium) {
+    const stripped = url.replace(/^https?:\/\//, "");
+    candidates.push({ label: "freedium", url: `https://freedium.cfd/${url}` });
+    candidates.push({ label: "freedium-alt", url: `https://freedium.cfd/https://${stripped}` });
+    candidates.push({ label: "archive-ph-newest", url: `https://archive.ph/newest/${url}` });
+    candidates.push({ label: "archive-ph", url: `https://archive.ph/${url}` });
+    candidates.push({ label: "12ft", url: `https://12ft.io/${url}` });
+  }
+
   // 1. Wayback Machine "available" API => closest snapshot
   try {
     const av = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`);
@@ -75,14 +88,19 @@ async function archiveCascade(url: string, log: (msg: string) => Promise<void>) 
   candidates.push({ label: "wayback-latest", url: `https://web.archive.org/web/2024/${url}` });
   candidates.push({ label: "wayback-id", url: `https://web.archive.org/web/2025id_/${url}` });
 
-  // 3. Google cache-style alt readers
-  candidates.push({ label: "freedium", url: `https://freedium.cfd/${url}` }); // medium-specific bypass
-  candidates.push({ label: "12ft", url: `https://12ft.io/${url}` });
+  // Non-medium fallbacks (or extra attempts if medium didn't recover)
+  if (!isMedium) {
+    candidates.push({ label: "freedium", url: `https://freedium.cfd/${url}` });
+    candidates.push({ label: "12ft", url: `https://12ft.io/${url}` });
+    candidates.push({ label: "archive-ph", url: `https://archive.ph/newest/${url}` });
+  }
 
-  // 4. archive.ph snapshot lookup
-  candidates.push({ label: "archive-ph", url: `https://archive.ph/newest/${url}` });
+  // De-dupe by URL while keeping order.
+  const seen = new Set<string>();
+  const ordered = candidates.filter((c) => (seen.has(c.url) ? false : (seen.add(c.url), true)));
 
-  for (const c of candidates) {
+  await log(`archive cascade: ${ordered.length} candidates${isMedium ? " (medium-priority)" : ""}`);
+  for (const c of ordered) {
     try {
       const r = await fc("/scrape", { url: c.url, formats: ["markdown"], onlyMainContent: true });
       if (!r.ok) { await log(`archive[${c.label}] scrape failed: ${r.error}`); continue; }
