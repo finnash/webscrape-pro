@@ -7,19 +7,50 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDistanceToNow } from "date-fns";
-import { Globe, ListChecks, Download, Copy, ExternalLink } from "lucide-react";
+import { Globe, ListChecks, Download, Copy, ExternalLink, RotateCw, X } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+
+const RETRY_ROUTES: Record<string, (j: any) => string> = {
+  scrape: (j) => `/scrape?url=${encodeURIComponent(j.input_url || "")}`,
+  search: (j) => `/search?q=${encodeURIComponent(j.input_query || "")}`,
+  map: (j) => `/map?url=${encodeURIComponent(j.input_url || "")}`,
+  crawl: (j) => `/crawl?url=${encodeURIComponent(j.input_url || "")}`,
+};
+
+const isActive = (s: string) => s === "running" || s === "pending";
+const canRetry = (j: any) => !!RETRY_ROUTES[j.endpoint] && (j.input_url || j.input_query);
 
 export default function Jobs() {
   const { user } = useAuth();
   const [rows, setRows] = useState<any[] | null>(null);
   const [open, setOpen] = useState<any | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) return;
     supabase.from("jobs").select("*").order("created_at", { ascending: false }).limit(100)
       .then(({ data }) => setRows(data || []));
   }, [user]);
+
+  const cancelJob = async (j: any) => {
+    setBusy(j.id);
+    const { error } = await supabase
+      .from("jobs")
+      .update({ status: "cancelled", error: "Cancelled by user" })
+      .eq("id", j.id);
+    setBusy(null);
+    if (error) { toast.error(error.message); return; }
+    setRows((rs) => rs?.map((r) => (r.id === j.id ? { ...r, status: "cancelled", error: "Cancelled by user" } : r)) || null);
+    toast.success("Job cancelled");
+  };
+
+  const retryJob = (j: any) => {
+    const builder = RETRY_ROUTES[j.endpoint];
+    if (!builder) { toast.error(`Retry not supported for ${j.endpoint}`); return; }
+    navigate(builder(j));
+  };
 
   return (
     <AppShell>
@@ -42,31 +73,73 @@ export default function Jobs() {
         {rows && rows.length > 0 && (
           <div className="rounded-2xl border border-border bg-card divide-y divide-border overflow-hidden">
             {rows.map((j) => (
-              <button key={j.id} onClick={() => setOpen(j)} className="w-full text-left px-4 py-3 sm:px-5 sm:py-4 flex items-center gap-4 hover:bg-muted/30 transition">
-                <div className="h-9 w-9 rounded-lg bg-gradient-fire/10 flex items-center justify-center text-primary shrink-0">
-                  <Globe className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{j.input_url || j.input_query || j.endpoint}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {j.endpoint} · {formatDistanceToNow(new Date(j.created_at), { addSuffix: true })} · {j.credits_used || 0} credits
+              <div key={j.id} className="px-4 py-3 sm:px-5 sm:py-4 flex items-center gap-3 hover:bg-muted/30 transition">
+                <button onClick={() => setOpen(j)} className="flex items-center gap-4 flex-1 min-w-0 text-left">
+                  <div className="h-9 w-9 rounded-lg bg-gradient-fire/10 flex items-center justify-center text-primary shrink-0">
+                    <Globe className="h-4 w-4" />
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{j.input_url || j.input_query || j.endpoint}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {j.endpoint} · {formatDistanceToNow(new Date(j.created_at), { addSuffix: true })} · {j.credits_used || 0} credits
+                    </div>
+                  </div>
+                  <Badge variant={j.status === "completed" ? "default" : j.status === "failed" ? "destructive" : "secondary"}>
+                    {j.status}
+                  </Badge>
+                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isActive(j.status) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy === j.id}
+                      onClick={(e) => { e.stopPropagation(); cancelJob(j); }}
+                      title="Cancel job"
+                    >
+                      <X className="h-3.5 w-3.5 sm:mr-1.5" />
+                      <span className="hidden sm:inline">Cancel</span>
+                    </Button>
+                  )}
+                  {(j.status === "failed" || j.status === "cancelled") && canRetry(j) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); retryJob(j); }}
+                      title="Retry job"
+                    >
+                      <RotateCw className="h-3.5 w-3.5 sm:mr-1.5" />
+                      <span className="hidden sm:inline">Retry</span>
+                    </Button>
+                  )}
                 </div>
-                <Badge variant={j.status === "completed" ? "default" : j.status === "failed" ? "destructive" : "secondary"}>
-                  {j.status}
-                </Badge>
-              </button>
+              </div>
             ))}
           </div>
         )}
 
-        <JobDialog job={open} onClose={() => setOpen(null)} />
+        <JobDialog
+          job={open}
+          onClose={() => setOpen(null)}
+          onCancel={async (j) => { await cancelJob(j); setOpen({ ...j, status: "cancelled", error: "Cancelled by user" }); }}
+          onRetry={(j) => { setOpen(null); retryJob(j); }}
+        />
       </div>
     </AppShell>
   );
 }
 
-const JobDialog = ({ job, onClose }: { job: any | null; onClose: () => void }) => {
+const JobDialog = ({
+  job,
+  onClose,
+  onCancel,
+  onRetry,
+}: {
+  job: any | null;
+  onClose: () => void;
+  onCancel: (j: any) => void | Promise<void>;
+  onRetry: (j: any) => void;
+}) => {
   if (!job) return null;
   const r = job.result || {};
   const md = r.markdown || r.summary || "";
@@ -90,6 +163,16 @@ const JobDialog = ({ job, onClose }: { job: any | null; onClose: () => void }) =
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           {job.input_url && (
             <Button asChild variant="outline" size="sm"><a href={job.input_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5 mr-1.5" />Open URL</a></Button>
+          )}
+          {isActive(job.status) && (
+            <Button variant="outline" size="sm" onClick={() => onCancel(job)}>
+              <X className="h-3.5 w-3.5 mr-1.5" />Cancel
+            </Button>
+          )}
+          {(job.status === "failed" || job.status === "cancelled") && canRetry(job) && (
+            <Button variant="outline" size="sm" onClick={() => onRetry(job)}>
+              <RotateCw className="h-3.5 w-3.5 mr-1.5" />Retry
+            </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => dl(JSON.stringify(job.result, null, 2), `${slug}.json`, "application/json")}>
             <Download className="h-3.5 w-3.5 mr-1.5" />JSON
