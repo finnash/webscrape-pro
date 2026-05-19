@@ -196,7 +196,7 @@ async function archiveCascade(url: string, log: (msg: string) => Promise<void>) 
       );
       if (!r.ok) { await log(`archive[${c.label}] scrape failed: ${r.error}`); continue; }
       const md = r.data?.markdown || "";
-      const sig = paywallSignals(md);
+      const sig = paywallSignals(md, { url: c.url, html: r.data?.html });
       if (!sig.paywalled) {
         await log(`archive[${c.label}] ✓ recovered ${md.length} chars`);
         return { markdown: md, metadata: r.data?.metadata, viaArchive: c.url, archiveLabel: c.label };
