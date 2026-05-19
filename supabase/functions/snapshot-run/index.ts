@@ -71,11 +71,16 @@ function interpolate(s: string, params: Record<string, any>) {
 }
 
 // More aggressive paywall / partial-content detection.
-function paywallSignals(md: string | undefined) {
+// Optional ctx allows Medium-specific DOM/HTML signal checks.
+function paywallSignals(
+  md: string | undefined,
+  ctx?: { url?: string; html?: string },
+) {
   if (!md) return { paywalled: true, reason: "empty" };
   const len = md.length;
   if (len < 800) return { paywalled: true, reason: `too_short:${len}` };
-  const patterns: [RegExp, string][] = [
+
+  const generic: [RegExp, string][] = [
     [/member-only story/i, "member-only"],
     [/this story is for paid members/i, "paid-members"],
     [/sign in to continue/i, "signin-wall"],
@@ -85,7 +90,56 @@ function paywallSignals(md: string | undefined) {
     [/upgrade to (?:medium|premium)/i, "upgrade-wall"],
     [/get (?:unlimited )?access/i, "access-wall"],
   ];
-  for (const [re, tag] of patterns) if (re.test(md)) return { paywalled: true, reason: tag };
+  for (const [re, tag] of generic) if (re.test(md)) return { paywalled: true, reason: tag };
+
+  const url = ctx?.url || "";
+  const html = ctx?.html || "";
+  const isMedium =
+    /(?:^|\/\/)([^/]*\.)?medium\.com\//i.test(url) ||
+    /\/\/[^/]+\/[^/]*@[^/]+\//.test(url) ||
+    /<meta[^>]+content="Medium"/i.test(html) ||
+    /property="al:ios:app_name"[^>]*content="Medium"/i.test(html);
+
+  if (isMedium) {
+    // 1) Medium-specific copy that sometimes only shows in markdown.
+    const mediumCopy: [RegExp, string][] = [
+      [/read the rest of this story with a free account/i, "medium:free-account-wall"],
+      [/sign up to discover human stories/i, "medium:signup-wall"],
+      [/make medium yours/i, "medium:onboarding-wall"],
+      [/this is a preview of the (?:full )?story/i, "medium:preview-wall"],
+      [/continue reading with a free trial/i, "medium:trial-wall"],
+      [/no responses yet/i, len < 1800 ? "medium:stub-no-responses" : ""],
+    ];
+    for (const [re, tag] of mediumCopy) if (tag && re.test(md)) return { paywalled: true, reason: tag };
+
+    // 2) DOM / HTML structural markers from Medium's paywall component.
+    if (html) {
+      const domMarkers: [RegExp, string][] = [
+        [/data-testid="paywall"/i, "medium:dom-paywall"],
+        [/class="[^"]*\bmeteredContent\b/i, "medium:dom-metered"],
+        [/class="[^"]*\bpaywall\b/i, "medium:dom-paywall-class"],
+        [/<div[^>]+id="paywall"/i, "medium:dom-paywall-id"],
+        [/aria-label="Member-only story"/i, "medium:dom-member-aria"],
+        [/<svg[^>]+aria-label="Member-only"/i, "medium:dom-member-svg"],
+        [/href="\/m\/signin\?[^"]*operation=login/i, "medium:dom-signin-cta"],
+      ];
+      for (const [re, tag] of domMarkers) if (re.test(html)) return { paywalled: true, reason: tag };
+
+      // 3) Blocked script / hydration markers — Medium gates body behind JS,
+      //    so server-rendered HTML missing the article body is a strong tell.
+      const hasArticleTag = /<article\b/i.test(html);
+      const hasNextDataStub = /__NEXT_DATA__[^<]{0,200}"isLocked":true/i.test(html);
+      const blockedScript = /<noscript>[\s\S]{0,200}enable JavaScript[\s\S]{0,200}<\/noscript>/i.test(html);
+      if (hasNextDataStub) return { paywalled: true, reason: "medium:next-data-locked" };
+      if (blockedScript && len < 3000) return { paywalled: true, reason: "medium:js-required" };
+      if (!hasArticleTag && len < 4000) return { paywalled: true, reason: "medium:no-article-tag" };
+    }
+
+    // 4) Truncated-article heuristic: Medium free previews are usually < ~3 paragraphs.
+    const paragraphs = md.split(/\n{2,}/).filter((p) => p.trim().length > 80).length;
+    if (paragraphs < 4 && len < 2200) return { paywalled: true, reason: `medium:truncated:${paragraphs}p/${len}c` };
+  }
+
   // If body contains Read more / Continue reading near very end, likely truncated.
   const tail = md.slice(-400).toLowerCase();
   if ((/read more|continue reading/.test(tail)) && len < 2500) return { paywalled: true, reason: "truncated_tail" };
@@ -142,7 +196,7 @@ async function archiveCascade(url: string, log: (msg: string) => Promise<void>) 
       );
       if (!r.ok) { await log(`archive[${c.label}] scrape failed: ${r.error}`); continue; }
       const md = r.data?.markdown || "";
-      const sig = paywallSignals(md);
+      const sig = paywallSignals(md, { url: c.url, html: r.data?.html });
       if (!sig.paywalled) {
         await log(`archive[${c.label}] ✓ recovered ${md.length} chars`);
         return { markdown: md, metadata: r.data?.metadata, viaArchive: c.url, archiveLabel: c.label };
@@ -277,12 +331,12 @@ Deno.serve(async (req) => {
                   if (!r.ok) { await log("warn", `Scrape failed ${t.url}: ${r.error}`); item = { url: t.url, title: t.title, error: r.error, attempts: ["direct:fail"] }; }
                   else item = { url: t.url, title: r.data?.metadata?.title || t.title, author: r.data?.metadata?.author, description: t.description, summary: r.data?.summary, markdown: r.data?.markdown, html: r.data?.html, links: r.data?.links, screenshot: r.data?.screenshot, metadata: r.data?.metadata, attempts: ["direct"] };
 
-                  // First-pass regex paywall check.
-                  let sig = paywallSignals(item.markdown);
+                  // First-pass paywall check (Medium-aware: uses URL + HTML signals when present).
+                  let sig = paywallSignals(item.markdown, { url: t.url, html: item.html });
                   if (sig.paywalled) {
                     await log("warn", `Gated content on ${t.url} (${sig.reason}); cascading archives`);
                     const av = await archiveCascade(t.url, (m) => log("info", m));
-                    if (av) { item = { ...item, ...av }; item.attempts.push(`archive:${av.archiveLabel}`); sig = paywallSignals(item.markdown); }
+                    if (av) { item = { ...item, ...av }; item.attempts.push(`archive:${av.archiveLabel}`); sig = paywallSignals(item.markdown, { url: t.url, html: item.html }); }
                   }
 
                   // Second-pass LLM verifier on borderline cases.
