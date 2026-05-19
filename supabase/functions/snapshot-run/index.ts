@@ -331,12 +331,12 @@ Deno.serve(async (req) => {
                   if (!r.ok) { await log("warn", `Scrape failed ${t.url}: ${r.error}`); item = { url: t.url, title: t.title, error: r.error, attempts: ["direct:fail"] }; }
                   else item = { url: t.url, title: r.data?.metadata?.title || t.title, author: r.data?.metadata?.author, description: t.description, summary: r.data?.summary, markdown: r.data?.markdown, html: r.data?.html, links: r.data?.links, screenshot: r.data?.screenshot, metadata: r.data?.metadata, attempts: ["direct"] };
 
-                  // First-pass regex paywall check.
-                  let sig = paywallSignals(item.markdown);
+                  // First-pass paywall check (Medium-aware: uses URL + HTML signals when present).
+                  let sig = paywallSignals(item.markdown, { url: t.url, html: item.html });
                   if (sig.paywalled) {
                     await log("warn", `Gated content on ${t.url} (${sig.reason}); cascading archives`);
                     const av = await archiveCascade(t.url, (m) => log("info", m));
-                    if (av) { item = { ...item, ...av }; item.attempts.push(`archive:${av.archiveLabel}`); sig = paywallSignals(item.markdown); }
+                    if (av) { item = { ...item, ...av }; item.attempts.push(`archive:${av.archiveLabel}`); sig = paywallSignals(item.markdown, { url: t.url, html: item.html }); }
                   }
 
                   // Second-pass LLM verifier on borderline cases.
