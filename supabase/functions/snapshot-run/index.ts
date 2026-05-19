@@ -30,6 +30,39 @@ async function fc(path: string, body: unknown) {
   }
 }
 
+// Retry a Firecrawl call with exponential backoff. Retries on transient
+// failures (network errors, 429, 5xx, timeouts). Does NOT retry on 4xx
+// client errors other than 408/429.
+async function fcRetry(
+  path: string,
+  body: unknown,
+  opts: { attempts?: number; baseMs?: number; label?: string; log?: (m: string) => Promise<void> } = {},
+) {
+  const attempts = opts.attempts ?? 3;
+  const baseMs = opts.baseMs ?? 500;
+  const label = opts.label ?? path;
+  let last: { ok: false; error: string } = { ok: false, error: "no attempt" };
+  for (let i = 0; i < attempts; i++) {
+    const r = await fc(path, body);
+    if (r.ok) {
+      if (i > 0 && opts.log) await opts.log(`${label} succeeded on retry ${i + 1}/${attempts}`);
+      return r;
+    }
+    last = r as { ok: false; error: string };
+    const err = String(r.error || "");
+    const transient =
+      /timeout|ECONN|fetch failed|network|socket|aborted|\b(408|425|429|500|502|503|504|520|521|522|523|524)\b/i.test(err);
+    if (!transient || i === attempts - 1) {
+      if (opts.log && i > 0) await opts.log(`${label} failed after ${i + 1} attempts: ${err}`);
+      return r;
+    }
+    const delay = baseMs * Math.pow(2, i) + Math.floor(Math.random() * 250);
+    if (opts.log) await opts.log(`${label} transient error (${err}); retrying in ${delay}ms [${i + 1}/${attempts}]`);
+    await new Promise((res) => setTimeout(res, delay));
+  }
+  return last;
+}
+
 function interpolate(s: string, params: Record<string, any>) {
   return s.replace(/\{(\w+)\}/g, (_, k) => {
     if (k === "subredditPath") return params.subreddit ? `/r/${params.subreddit}` : "";
@@ -102,7 +135,11 @@ async function archiveCascade(url: string, log: (msg: string) => Promise<void>) 
   await log(`archive cascade: ${ordered.length} candidates${isMedium ? " (medium-priority)" : ""}`);
   for (const c of ordered) {
     try {
-      const r = await fc("/scrape", { url: c.url, formats: ["markdown"], onlyMainContent: true });
+      const r = await fcRetry(
+        "/scrape",
+        { url: c.url, formats: ["markdown"], onlyMainContent: true },
+        { attempts: 3, baseMs: 600, label: `archive[${c.label}]`, log },
+      );
       if (!r.ok) { await log(`archive[${c.label}] scrape failed: ${r.error}`); continue; }
       const md = r.data?.markdown || "";
       const sig = paywallSignals(md);
