@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,8 @@ import { toast } from "sonner";
 import { Loader2, Layers, ExternalLink, Download } from "lucide-react";
 
 export default function Crawl() {
-  const [url, setUrl] = useState("");
+  const [params] = useSearchParams();
+  const [url, setUrl] = useState(params.get("url") || "");
   const [limit, setLimit] = useState(25);
   const [maxDepth, setMaxDepth] = useState(2);
   const [include, setInclude] = useState("");
