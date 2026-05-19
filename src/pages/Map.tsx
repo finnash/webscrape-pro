@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,8 @@ import { Map as MapIcon, Loader2, Download, Search, ExternalLink, X } from "luci
 
 export default function MapPage() {
   const { user } = useAuth();
-  const [url, setUrl] = useState("");
+  const [params] = useSearchParams();
+  const [url, setUrl] = useState(params.get("url") || "");
   const [search, setSearch] = useState("");
   const [includeSub, setIncludeSub] = useState(false);
   const [limit, setLimit] = useState(500);

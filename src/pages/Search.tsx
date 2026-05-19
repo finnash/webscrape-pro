@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,8 @@ type SearchResult = {
 
 export default function SearchPage() {
   const { user } = useAuth();
-  const [query, setQuery] = useState("");
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState(params.get("q") || "");
   const [limit, setLimit] = useState(10);
   const [tbs, setTbs] = useState("any");
   const [country, setCountry] = useState("");
