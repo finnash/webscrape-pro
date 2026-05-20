@@ -170,6 +170,12 @@ const JobDialog = ({
   };
   const copy = (s: string) => { navigator.clipboard.writeText(s); toast.success("Copied"); };
   const slug = (job.input_url || job.input_query || job.endpoint).replace(/[^a-z0-9]+/gi, "-").slice(0, 40);
+
+  const steps = useMemo(() => buildSteps(job), [job]);
+  const pct = progressPct(job, steps);
+  const meta = r?.metadata || (Array.isArray(r) ? null : r?.data?.metadata) || null;
+  const stats = computeStats(job, r, links, md);
+
   return (
     <Dialog open={!!job} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
@@ -179,6 +185,22 @@ const JobDialog = ({
             <span className="truncate font-mono text-xs text-muted-foreground">{job.input_url || job.input_query}</span>
           </DialogTitle>
         </DialogHeader>
+
+        <div className="mb-3 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <Badge variant={job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"}>
+                {job.status}
+              </Badge>
+              <span className="text-muted-foreground">
+                {formatDistanceStrict(new Date(job.created_at), new Date(job.updated_at || job.created_at))} elapsed
+              </span>
+            </div>
+            <span className="text-muted-foreground tabular-nums">{pct}%</span>
+          </div>
+          <Progress value={pct} className={job.status === "failed" ? "[&>div]:bg-destructive" : ""} />
+        </div>
+
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           {job.input_url && (
             <Button asChild variant="outline" size="sm"><a href={job.input_url} target="_blank" rel="noreferrer"><ExternalLink className="h-3.5 w-3.5 mr-1.5" />Open URL</a></Button>
@@ -200,9 +222,41 @@ const JobDialog = ({
           {links.length > 0 && <Button variant="outline" size="sm" onClick={() => dl("url\n" + links.join("\n"), `${slug}-links.csv`, "text/csv")}><Download className="h-3.5 w-3.5 mr-1.5" />Links CSV</Button>}
           <Button variant="ghost" size="sm" onClick={() => copy(JSON.stringify(job.result, null, 2))}><Copy className="h-3.5 w-3.5 mr-1.5" />Copy</Button>
         </div>
+
+        <div className="mb-3 rounded-lg border border-border bg-card px-3 py-2.5">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Steps</div>
+          <ol className="space-y-1.5">
+            {steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <StepIcon state={s.state} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={s.state === "pending" ? "text-muted-foreground" : ""}>{s.label}</span>
+                    {s.at && <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{new Date(s.at).toLocaleTimeString()}</span>}
+                  </div>
+                  {s.detail && <div className="text-[11px] text-muted-foreground mt-0.5 break-words">{s.detail}</div>}
+                </div>
+              </li>
+            ))}
+          </ol>
+          {stats.length > 0 && (
+            <div className="mt-3 pt-2.5 border-t border-border grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {stats.map((s) => (
+                <div key={s.label}>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
+                  <div className="text-xs font-medium truncate" title={String(s.value)}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="overflow-auto flex-1 rounded-lg border border-border bg-muted/30 p-4">
           {job.error ? (
-            <div className="text-sm text-destructive">{job.error}</div>
+            <div className="text-sm text-destructive flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span className="whitespace-pre-wrap break-words">{job.error}</span>
+            </div>
           ) : md ? (
             <pre className="text-xs whitespace-pre-wrap font-mono">{md.slice(0, 20000)}</pre>
           ) : (
@@ -213,3 +267,95 @@ const JobDialog = ({
     </Dialog>
   );
 };
+
+type StepState = "done" | "active" | "pending" | "error";
+type Step = { label: string; state: StepState; at?: string; detail?: string };
+
+const StepIcon = ({ state }: { state: StepState }) => {
+  const cls = "h-3.5 w-3.5 mt-0.5 shrink-0";
+  if (state === "done") return <Check className={`${cls} text-primary`} />;
+  if (state === "active") return <Loader2 className={`${cls} text-primary animate-spin`} />;
+  if (state === "error") return <AlertCircle className={`${cls} text-destructive`} />;
+  return <Clock className={`${cls} text-muted-foreground`} />;
+};
+
+function buildSteps(job: any): Step[] {
+  const r = job.result || {};
+  const ep = job.endpoint;
+  const status: string = job.status;
+  const created = job.created_at;
+  const updated = job.updated_at;
+  const failed = status === "failed";
+  const cancelled = status === "cancelled";
+  const done = status === "completed";
+  const running = status === "running" || status === "pending";
+
+  const verb = ep === "search" ? "Searching" : ep === "map" ? "Mapping" : ep === "crawl" ? "Crawling" : "Scraping";
+  const itemCount = Array.isArray(r) ? r.length : Array.isArray(r?.data) ? r.data.length : Array.isArray(r?.links) ? r.links.length : null;
+  const mdLen = (r?.markdown || r?.summary || "").length;
+
+  const steps: Step[] = [
+    { label: "Job queued", state: "done", at: created },
+    { label: `${verb} started`, state: running || done || failed ? (running ? "active" : "done") : "pending", at: running || done || failed ? created : undefined, detail: job.input_url || job.input_query || undefined },
+  ];
+
+  if (ep === "scrape") {
+    steps.push({
+      label: "Fetching page",
+      state: done ? "done" : failed ? "error" : running ? "active" : "pending",
+      detail: r?.metadata?.statusCode ? `HTTP ${r.metadata.statusCode}` : undefined,
+    });
+    steps.push({
+      label: "Extracting content",
+      state: done ? "done" : failed ? "error" : "pending",
+      detail: done && mdLen ? `${mdLen.toLocaleString()} chars of markdown` : undefined,
+    });
+  } else if (ep === "search") {
+    steps.push({
+      label: "Querying index",
+      state: done ? "done" : failed ? "error" : running ? "active" : "pending",
+      detail: done && itemCount != null ? `${itemCount} results` : undefined,
+    });
+  } else if (ep === "map" || ep === "crawl") {
+    steps.push({
+      label: ep === "map" ? "Discovering URLs" : "Crawling pages",
+      state: done ? "done" : failed ? "error" : running ? "active" : "pending",
+      detail: done && itemCount != null ? `${itemCount} URLs` : undefined,
+    });
+  }
+
+  if (cancelled) {
+    steps.push({ label: "Cancelled by user", state: "error", at: updated });
+  } else if (failed) {
+    steps.push({ label: "Failed", state: "error", at: updated, detail: job.error || undefined });
+  } else if (done) {
+    steps.push({ label: "Completed", state: "done", at: updated });
+  } else {
+    steps.push({ label: "Finalizing", state: "pending" });
+  }
+  return steps;
+}
+
+function progressPct(job: any, steps: Step[]): number {
+  if (job.status === "completed") return 100;
+  if (job.status === "failed" || job.status === "cancelled") {
+    const reached = steps.filter((s) => s.state === "done").length;
+    return Math.min(95, Math.round((reached / steps.length) * 100));
+  }
+  const done = steps.filter((s) => s.state === "done").length;
+  const active = steps.some((s) => s.state === "active") ? 0.5 : 0;
+  return Math.max(5, Math.min(90, Math.round(((done + active) / steps.length) * 100)));
+}
+
+function computeStats(job: any, r: any, links: string[], md: string) {
+  const out: { label: string; value: string }[] = [];
+  if (job.credits_used != null) out.push({ label: "Credits", value: String(job.credits_used) });
+  if (md) out.push({ label: "Markdown", value: `${md.length.toLocaleString()} chars` });
+  if (links.length) out.push({ label: "Links", value: String(links.length) });
+  const sc = r?.metadata?.statusCode;
+  if (sc) out.push({ label: "HTTP", value: String(sc) });
+  const title = r?.metadata?.title;
+  if (title) out.push({ label: "Title", value: String(title) });
+  if (Array.isArray(job.formats) && job.formats.length) out.push({ label: "Formats", value: job.formats.join(", ") });
+  return out;
+}
