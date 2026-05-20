@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,8 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatDistanceToNow } from "date-fns";
-import { Globe, ListChecks, Download, Copy, ExternalLink, RotateCw, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { formatDistanceToNow, formatDistanceStrict } from "date-fns";
+import { Globe, ListChecks, Download, Copy, ExternalLink, RotateCw, X, Check, Loader2, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -51,6 +52,24 @@ export default function Jobs() {
     if (!builder) { toast.error(`Retry not supported for ${j.endpoint}`); return; }
     navigate(builder(j));
   };
+
+  // Live updates for the open job (handy when a job is still running)
+  useEffect(() => {
+    if (!open?.id) return;
+    const ch = supabase
+      .channel(`job-${open.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "jobs", filter: `id=eq.${open.id}` },
+        (payload) => {
+          const next = payload.new as any;
+          setOpen((o: any) => (o && o.id === next.id ? { ...o, ...next } : o));
+          setRows((rs) => rs?.map((r) => (r.id === next.id ? { ...r, ...next } : r)) || null);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [open?.id]);
 
   return (
     <AppShell>
