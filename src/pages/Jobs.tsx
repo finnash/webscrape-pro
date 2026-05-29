@@ -260,7 +260,7 @@ const JobDialog = ({
 };
 
 type StepState = "done" | "active" | "pending" | "error";
-type Step = { label: string; state: StepState; at?: string; detail?: string };
+type Step = { label: string; state: StepState; at?: string; detail?: string; context?: Record<string, any> };
 
 const StepIcon = ({ state }: { state: StepState }) => {
   const cls = "h-3.5 w-3.5 mt-0.5 shrink-0";
@@ -268,6 +268,54 @@ const StepIcon = ({ state }: { state: StepState }) => {
   if (state === "active") return <Loader2 className={`${cls} text-primary animate-spin`} />;
   if (state === "error") return <AlertCircle className={`${cls} text-destructive`} />;
   return <Clock className={`${cls} text-muted-foreground`} />;
+};
+
+const StepRow = ({ step }: { step: Step }) => {
+  const [open, setOpen] = useState(false);
+  const hasContext = !!step.context && Object.keys(step.context).length > 0;
+  return (
+    <li className="text-xs">
+      <button
+        type="button"
+        onClick={() => hasContext && setOpen((v) => !v)}
+        className={`w-full flex items-start gap-2 text-left rounded px-1 py-1 ${hasContext ? "hover:bg-muted/50 cursor-pointer" : "cursor-default"}`}
+      >
+        <StepIcon state={step.state} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className={`flex items-center gap-1 ${step.state === "pending" ? "text-muted-foreground" : ""}`}>
+              {hasContext && (
+                <ChevronRight className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""} text-muted-foreground`} />
+              )}
+              {step.label}
+            </span>
+            {step.at && <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{new Date(step.at).toLocaleTimeString()}</span>}
+          </div>
+          {step.detail && <div className="text-[11px] text-muted-foreground mt-0.5 break-words">{step.detail}</div>}
+        </div>
+      </button>
+      {open && hasContext && (
+        <div className="ml-6 mt-1 mb-2 space-y-2">
+          {Object.entries(step.context!).map(([k, v]) => (
+            <div key={k} className="rounded border border-border bg-muted/40">
+              <div className="flex items-center justify-between px-2 py-1 border-b border-border">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{k}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(typeof v === "string" ? v : JSON.stringify(v, null, 2)); toast.success("Copied"); }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  <Copy className="h-2.5 w-2.5" /> Copy
+                </button>
+              </div>
+              <pre className="text-[11px] font-mono p-2 max-h-48 overflow-auto whitespace-pre-wrap break-words">
+                {typeof v === "string" ? v : JSON.stringify(v, null, 2)}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </li>
+  );
 };
 
 function buildSteps(job: any): Step[] {
@@ -284,43 +332,75 @@ function buildSteps(job: any): Step[] {
   const verb = ep === "search" ? "Searching" : ep === "map" ? "Mapping" : ep === "crawl" ? "Crawling" : "Scraping";
   const itemCount = Array.isArray(r) ? r.length : Array.isArray(r?.data) ? r.data.length : Array.isArray(r?.links) ? r.links.length : null;
   const mdLen = (r?.markdown || r?.summary || "").length;
+  const linksArr: string[] = Array.isArray(r?.links) ? r.links : Array.isArray(r) ? r.map((x: any) => x.url).filter(Boolean) : [];
+  const meta = r?.metadata || r?.data?.metadata || null;
 
   const steps: Step[] = [
-    { label: "Job queued", state: "done", at: created },
-    { label: `${verb} started`, state: running || done || failed ? (running ? "active" : "done") : "pending", at: running || done || failed ? created : undefined, detail: job.input_url || job.input_query || undefined },
+    {
+      label: "Job queued",
+      state: "done",
+      at: created,
+      context: {
+        request: { endpoint: ep, input_url: job.input_url, input_query: job.input_query, formats: job.formats, options: job.options },
+        job_id: job.id,
+      },
+    },
+    {
+      label: `${verb} started`,
+      state: running || done || failed ? (running ? "active" : "done") : "pending",
+      at: running || done || failed ? created : undefined,
+      detail: job.input_url || job.input_query || undefined,
+      context: { target: job.input_url || job.input_query, endpoint: ep, options: job.options || {} },
+    },
   ];
 
   if (ep === "scrape") {
     steps.push({
       label: "Fetching page",
       state: done ? "done" : failed ? "error" : running ? "active" : "pending",
-      detail: r?.metadata?.statusCode ? `HTTP ${r.metadata.statusCode}` : undefined,
+      detail: meta?.statusCode ? `HTTP ${meta.statusCode}` : undefined,
+      context: meta ? { response_metadata: meta } : undefined,
     });
     steps.push({
       label: "Extracting content",
       state: done ? "done" : failed ? "error" : "pending",
       detail: done && mdLen ? `${mdLen.toLocaleString()} chars of markdown` : undefined,
+      context: done ? {
+        markdown_preview: (r?.markdown || r?.summary || "").slice(0, 2000),
+        markdown_length: mdLen,
+        html_length: (r?.html || "").length || undefined,
+        formats_returned: r ? Object.keys(r).filter((k) => ["markdown","html","links","screenshot","summary","metadata"].includes(k)) : undefined,
+      } : undefined,
     });
   } else if (ep === "search") {
     steps.push({
       label: "Querying index",
       state: done ? "done" : failed ? "error" : running ? "active" : "pending",
       detail: done && itemCount != null ? `${itemCount} results` : undefined,
+      context: done ? {
+        query: job.input_query,
+        results_preview: (Array.isArray(r) ? r : r?.data || []).slice(0, 10),
+        total_results: itemCount,
+      } : undefined,
     });
   } else if (ep === "map" || ep === "crawl") {
     steps.push({
       label: ep === "map" ? "Discovering URLs" : "Crawling pages",
       state: done ? "done" : failed ? "error" : running ? "active" : "pending",
       detail: done && itemCount != null ? `${itemCount} URLs` : undefined,
+      context: done ? {
+        urls_preview: linksArr.slice(0, 50),
+        total_urls: linksArr.length || itemCount,
+      } : undefined,
     });
   }
 
   if (cancelled) {
-    steps.push({ label: "Cancelled by user", state: "error", at: updated });
+    steps.push({ label: "Cancelled by user", state: "error", at: updated, context: { reason: job.error || "Cancelled by user" } });
   } else if (failed) {
-    steps.push({ label: "Failed", state: "error", at: updated, detail: job.error || undefined });
+    steps.push({ label: "Failed", state: "error", at: updated, detail: job.error || undefined, context: { error: job.error, partial_result: r } });
   } else if (done) {
-    steps.push({ label: "Completed", state: "done", at: updated });
+    steps.push({ label: "Completed", state: "done", at: updated, context: { credits_used: job.credits_used, full_response: r } });
   } else {
     steps.push({ label: "Finalizing", state: "pending" });
   }
