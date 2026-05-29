@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { formatDistanceToNow, formatDistanceStrict } from "date-fns";
-import { Globe, ListChecks, Download, Copy, ExternalLink, RotateCw, X, Check, Loader2, AlertCircle, Clock } from "lucide-react";
+import { Globe, ListChecks, Download, Copy, ExternalLink, RotateCw, X, Check, Loader2, AlertCircle, Clock, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -225,18 +225,9 @@ const JobDialog = ({
 
         <div className="mb-3 rounded-lg border border-border bg-card px-3 py-2.5">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Steps</div>
-          <ol className="space-y-1.5">
+          <ol className="space-y-1">
             {steps.map((s, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs">
-                <StepIcon state={s.state} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={s.state === "pending" ? "text-muted-foreground" : ""}>{s.label}</span>
-                    {s.at && <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{new Date(s.at).toLocaleTimeString()}</span>}
-                  </div>
-                  {s.detail && <div className="text-[11px] text-muted-foreground mt-0.5 break-words">{s.detail}</div>}
-                </div>
-              </li>
+              <StepRow key={i} step={s} />
             ))}
           </ol>
           {stats.length > 0 && (
