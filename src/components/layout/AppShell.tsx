@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { AssistantDock } from "@/components/AssistantDock";
 import {
   LayoutDashboard, Globe, Search, Map as MapIcon, Layers, Sparkles,
-  FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut, MessageSquare, Camera,
+  FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut, MessageSquare, Camera, Radar,
 } from "lucide-react";
 
 const nav = [
   { to: "/", label: "Home", icon: LayoutDashboard, end: true },
   { to: "/scrape", label: "Scrape", icon: Globe, ready: true },
   { to: "/search", label: "Search", icon: Search, ready: true },
+  { to: "/monitor", label: "Monitor", icon: Radar, ready: true },
   { to: "/map", label: "Map", icon: MapIcon },
   { to: "/assistant", label: "AI Assistant", icon: MessageSquare, ready: true },
   { to: "/snapshots", label: "Snapshots", icon: Camera, ready: true },

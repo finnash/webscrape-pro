@@ -121,6 +121,107 @@ export type Database = {
         }
         Relationships: []
       }
+      monitor_events: {
+        Row: {
+          created_at: string
+          delivered_to_discord: boolean
+          diff: string | null
+          id: string
+          kind: string
+          matched_keywords: string[] | null
+          monitor_id: string
+          snapshot: string | null
+          summary: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivered_to_discord?: boolean
+          diff?: string | null
+          id?: string
+          kind: string
+          matched_keywords?: string[] | null
+          monitor_id: string
+          snapshot?: string | null
+          summary?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delivered_to_discord?: boolean
+          diff?: string | null
+          id?: string
+          kind?: string
+          matched_keywords?: string[] | null
+          monitor_id?: string
+          snapshot?: string | null
+          summary?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monitor_events_monitor_id_fkey"
+            columns: ["monitor_id"]
+            isOneToOne: false
+            referencedRelation: "monitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monitors: {
+        Row: {
+          created_at: string
+          discord_webhook_url: string | null
+          enabled: boolean
+          failure_count: number
+          id: string
+          interval_minutes: number
+          keywords: string[] | null
+          last_checked_at: string | null
+          last_hash: string | null
+          last_snapshot: string | null
+          name: string
+          selector: string | null
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discord_webhook_url?: string | null
+          enabled?: boolean
+          failure_count?: number
+          id?: string
+          interval_minutes?: number
+          keywords?: string[] | null
+          last_checked_at?: string | null
+          last_hash?: string | null
+          last_snapshot?: string | null
+          name: string
+          selector?: string | null
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discord_webhook_url?: string | null
+          enabled?: boolean
+          failure_count?: number
+          id?: string
+          interval_minutes?: number
+          keywords?: string[] | null
+          last_checked_at?: string | null
+          last_hash?: string | null
+          last_snapshot?: string | null
+          name?: string
+          selector?: string | null
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

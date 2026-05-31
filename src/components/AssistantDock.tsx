@@ -76,7 +76,7 @@ export const AssistantDock = () => {
             <Sparkles className="h-3.5 w-3.5 text-primary-foreground" />
           </div>
           <div>
-            <div className="text-sm font-semibold leading-tight">Firecrawl AI</div>
+            <div className="text-sm font-semibold leading-tight">Meow Assistant</div>
             <div className="text-[10px] text-muted-foreground">Gemini 3 Flash · scrape · search · map</div>
           </div>
         </div>

@@ -8,95 +8,97 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 30 33% 98%;
-    --foreground: 24 30% 8%;
+    /* Light mode = soft mint-paper to mirror the cat sticker background */
+    --background: 190 45% 96%;
+    --foreground: 200 35% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 24 30% 8%;
+    --card-foreground: 200 35% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 24 30% 8%;
+    --popover-foreground: 200 35% 10%;
 
-    --primary: 18 95% 54%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 30 100% 62%;
+    --primary: 172 75% 45%;
+    --primary-foreground: 200 50% 8%;
+    --primary-glow: 180 80% 60%;
 
-    --secondary: 30 25% 94%;
-    --secondary-foreground: 24 30% 12%;
+    --secondary: 190 30% 92%;
+    --secondary-foreground: 200 35% 12%;
 
-    --muted: 30 20% 95%;
-    --muted-foreground: 24 8% 42%;
+    --muted: 190 25% 93%;
+    --muted-foreground: 200 12% 40%;
 
-    --accent: 18 95% 54%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 172 75% 45%;
+    --accent-foreground: 200 50% 8%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 75% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 24 15% 89%;
-    --input: 24 15% 89%;
-    --ring: 18 95% 54%;
+    --border: 195 25% 86%;
+    --input: 195 25% 86%;
+    --ring: 172 75% 45%;
 
     --radius: 0.85rem;
 
-    --gradient-fire: linear-gradient(135deg, hsl(18 95% 54%), hsl(30 100% 62%));
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% 0%, hsl(18 95% 54% / 0.18), transparent);
-    --shadow-glow: 0 20px 60px -20px hsl(18 95% 54% / 0.45);
-    --shadow-elegant: 0 10px 40px -12px hsl(24 30% 8% / 0.12);
+    --gradient-fire: linear-gradient(135deg, hsl(172 75% 45%), hsl(190 85% 60%));
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% 0%, hsl(172 75% 45% / 0.18), transparent);
+    --shadow-glow: 0 20px 60px -20px hsl(172 75% 45% / 0.45);
+    --shadow-elegant: 0 10px 40px -12px hsl(200 35% 10% / 0.12);
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 18 95% 54%;
+    --sidebar-background: 190 40% 97%;
+    --sidebar-foreground: 200 20% 26%;
+    --sidebar-primary: 172 75% 45%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 30 25% 94%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 24 15% 89%;
-    --sidebar-ring: 18 95% 54%;
+    --sidebar-accent: 190 30% 92%;
+    --sidebar-accent-foreground: 200 35% 12%;
+    --sidebar-border: 195 25% 86%;
+    --sidebar-ring: 172 75% 45%;
   }
 
   .dark {
-    --background: 24 18% 6%;
-    --foreground: 30 25% 96%;
+    /* Dark-first Meow palette: deep midnight-teal with mint accent (matches cat sticker vibe) */
+    --background: 200 35% 5%;
+    --foreground: 180 30% 95%;
 
-    --card: 24 18% 9%;
-    --card-foreground: 30 25% 96%;
+    --card: 200 30% 8%;
+    --card-foreground: 180 30% 95%;
 
-    --popover: 24 18% 9%;
-    --popover-foreground: 30 25% 96%;
+    --popover: 200 30% 8%;
+    --popover-foreground: 180 30% 95%;
 
-    --primary: 18 95% 58%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 30 100% 65%;
+    --primary: 172 80% 55%;
+    --primary-foreground: 200 50% 8%;
+    --primary-glow: 180 90% 70%;
 
-    --secondary: 24 14% 14%;
-    --secondary-foreground: 30 25% 96%;
+    --secondary: 200 25% 13%;
+    --secondary-foreground: 180 30% 95%;
 
-    --muted: 24 14% 12%;
-    --muted-foreground: 30 10% 65%;
+    --muted: 200 25% 11%;
+    --muted-foreground: 190 15% 68%;
 
-    --accent: 18 95% 58%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 172 80% 55%;
+    --accent-foreground: 200 50% 8%;
 
-    --destructive: 0 70% 50%;
+    --destructive: 0 75% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 24 14% 16%;
-    --input: 24 14% 16%;
-    --ring: 18 95% 58%;
+    --border: 200 25% 16%;
+    --input: 200 25% 16%;
+    --ring: 172 80% 55%;
 
-    --gradient-fire: linear-gradient(135deg, hsl(18 95% 58%), hsl(30 100% 65%));
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% 0%, hsl(18 95% 58% / 0.22), transparent);
-    --shadow-glow: 0 20px 60px -20px hsl(18 95% 58% / 0.55);
-    --shadow-elegant: 0 10px 40px -12px hsl(0 0% 0% / 0.5);
+    --gradient-fire: linear-gradient(135deg, hsl(172 80% 55%), hsl(190 90% 65%));
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% 0%, hsl(172 80% 55% / 0.22), transparent);
+    --shadow-glow: 0 20px 60px -20px hsl(172 80% 55% / 0.55);
+    --shadow-elegant: 0 10px 40px -12px hsl(0 0% 0% / 0.6);
 
-    --sidebar-background: 24 18% 7%;
-    --sidebar-foreground: 30 15% 80%;
-    --sidebar-primary: 18 95% 58%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 24 14% 12%;
-    --sidebar-accent-foreground: 30 25% 96%;
-    --sidebar-border: 24 14% 16%;
-    --sidebar-ring: 18 95% 58%;
+    --sidebar-background: 200 32% 6%;
+    --sidebar-foreground: 190 15% 78%;
+    --sidebar-primary: 172 80% 55%;
+    --sidebar-primary-foreground: 200 50% 8%;
+    --sidebar-accent: 200 25% 11%;
+    --sidebar-accent-foreground: 180 30% 95%;
+    --sidebar-border: 200 25% 16%;
+    --sidebar-ring: 172 80% 55%;
   }
 }
 
