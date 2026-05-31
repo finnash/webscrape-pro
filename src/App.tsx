@@ -19,6 +19,7 @@ import Snapshots from "./pages/Snapshots";
 import Crawl from "./pages/Crawl";
 import Extract from "./pages/Extract";
 import ParsePdf from "./pages/ParsePdf";
+import MonitorPage from "./pages/Monitor";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/crawl" element={<Crawl />} />
               <Route path="/extract" element={<Extract />} />
               <Route path="/parse" element={<ParsePdf />} />
+              <Route path="/monitor" element={<MonitorPage />} />
             <Route path="/browser" element={<BrowserSessions />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/assistant/:threadId" element={<Assistant />} />

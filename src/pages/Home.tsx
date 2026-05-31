@@ -4,12 +4,13 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Globe, Search, Map as MapIcon, Layers, Sparkles, FileText, Monitor, Zap } from "lucide-react";
+import { ArrowRight, Globe, Search, Map as MapIcon, Layers, Sparkles, FileText, Monitor, Zap, Radar } from "lucide-react";
 import { lifetimeEstimates, TOTAL_CREDITS } from "@/lib/credits";
 
 const cards = [
   { to: "/scrape", icon: Globe, title: "Scrape", desc: "Extract clean markdown, HTML, links and screenshots from any URL.", ready: true },
   { to: "/search", icon: Search, title: "Search", desc: "Web search with optional content scraping of every result.", ready: true },
+  { to: "/monitor", icon: Radar, title: "Monitor", desc: "Watch any page on a schedule. Get Discord pings the moment it changes.", ready: true },
   { to: "/map", icon: MapIcon, title: "Map", desc: "Discover every URL on a website in seconds." },
   { to: "/crawl", icon: Layers, title: "Crawl", desc: "Recursively scrape entire sites with smart depth controls." },
   { to: "/extract", icon: Sparkles, title: "Extract", desc: "LLM-powered structured data extraction with schemas." },
@@ -34,10 +35,10 @@ export default function Home() {
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-10 sm:pt-20 pb-10">
           <div className="flex justify-center mb-6"><Logo size={44} /></div>
           <h1 className="text-center text-3xl sm:text-5xl font-semibold tracking-tight mb-4">
-            Turn the web into <span className="text-gradient-fire">clean data</span>
+            Watch the web. <span className="text-gradient-fire">Pounce on what changes.</span>
           </h1>
           <p className="text-center text-muted-foreground max-w-xl mx-auto mb-8 sm:text-lg">
-            A beautiful, human-friendly layer on top of Firecrawl. Scrape, search, map, crawl — every result downloadable, every job saved.
+            Meow Scraper turns any URL into clean data, monitors the pages you care about, and pings your Discord the second anything moves.
           </p>
 
           <form onSubmit={go} className="mx-auto max-w-2xl">
