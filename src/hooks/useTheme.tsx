@@ -6,14 +6,14 @@ const ThemeCtx = createContext<{ theme: Theme; toggle: () => void }>({ theme: "d
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === "undefined") return "dark";
-    const stored = localStorage.getItem("fc-theme") as Theme | null;
+    const stored = localStorage.getItem("meow-theme") as Theme | null;
     if (stored) return stored;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return "dark"; // Meow Scraper is dark-first
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("fc-theme", theme);
+    localStorage.setItem("meow-theme", theme);
   }, [theme]);
 
   return <ThemeCtx.Provider value={{ theme, toggle: () => setTheme((t) => (t === "dark" ? "light" : "dark")) }}>{children}</ThemeCtx.Provider>;
