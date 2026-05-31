@@ -214,7 +214,7 @@ export default function Scrape() {
               </div>
               <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground flex gap-2">
                 <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
-                <span><strong className="text-foreground">Tuned preset:</strong> main-content extraction with clean markdown — beats default Firecrawl output for readability.</span>
+                <span><strong className="text-foreground">Tuned preset:</strong> main-content extraction with clean markdown — beats default output for readability.</span>
               </div>
             </div>
           )}

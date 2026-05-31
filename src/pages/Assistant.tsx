@@ -150,7 +150,7 @@ function NewChatLanding({ onCreate }: { onCreate: (text: string) => void }) {
           <Sparkles className="h-7 w-7 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-3xl font-semibold">Firecrawl AI Assistant</h1>
+          <h1 className="text-3xl font-semibold">Meow Assistant</h1>
           <p className="text-sm text-muted-foreground mt-2">
             Powered by <span className="font-medium text-foreground">Gemini 3 Flash</span> · 3 tools wired
             (scrape, search, map) · responses persist per chat.
@@ -261,7 +261,7 @@ function ChatWindow({
           <Sparkles className="h-3.5 w-3.5 text-primary-foreground" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold leading-tight">Firecrawl AI</div>
+          <div className="text-sm font-semibold leading-tight">Meow Assistant</div>
           <div className="text-[10px] text-muted-foreground">
             Gemini 3 Flash · tools: scrape · search · map
           </div>

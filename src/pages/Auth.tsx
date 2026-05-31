@@ -34,7 +34,7 @@ export default function Auth() {
     setBusy(false);
     if (error) {
       const msg = /SIGNUP_RESTRICTED|Database error saving new user|allowlist|check_violation/i.test(error.message)
-        ? "Signups are restricted on Firecrawl Pro. Contact Finn to get access."
+        ? "Signups are restricted on Meow Scraper. Contact Finn to get access."
         : error.message;
       toast.error(msg);
     } else {
@@ -88,7 +88,7 @@ export default function Auth() {
             </TabsContent>
           </Tabs>
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-6">By continuing you agree to use Firecrawl Pro responsibly.</p>
+        <p className="text-center text-xs text-muted-foreground mt-6">By continuing you agree to use Meow Scraper responsibly.</p>
       </div>
     </div>
   );

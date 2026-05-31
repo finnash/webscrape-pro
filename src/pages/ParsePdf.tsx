@@ -20,7 +20,7 @@ export default function ParsePdf() {
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
     if (!/\.pdf(\?|$)/i.test(normalized)) {
       // soft warn
-      toast.message("URL doesn't end in .pdf — Firecrawl will still try.");
+      toast.message("URL doesn't end in .pdf — we will still try.");
     }
     setLoading(true); setResult(null);
     const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
