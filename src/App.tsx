@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { ProfileProvider } from "@/hooks/useProfile";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import Scrape from "./pages/Scrape";
@@ -12,7 +13,6 @@ import SearchPage from "./pages/Search";
 import BrowserSessions from "./pages/Browser";
 import Jobs from "./pages/Jobs";
 import MapPage from "./pages/Map";
-import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 import Assistant from "./pages/Assistant";
 import Snapshots from "./pages/Snapshots";
@@ -20,6 +20,9 @@ import Crawl from "./pages/Crawl";
 import Extract from "./pages/Extract";
 import ParsePdf from "./pages/ParsePdf";
 import MonitorPage from "./pages/Monitor";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -27,7 +30,8 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
+        <ProfileProvider>
+          <TooltipProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
@@ -46,11 +50,14 @@ const App = () => (
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/assistant/:threadId" element={<Assistant />} />
               <Route path="/snapshots" element={<Snapshots />} />
-              <Route path="/settings" element={<ComingSoon title="Settings" description="Account preferences and API key management." />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
-        </TooltipProvider>
+          </TooltipProvider>
+        </ProfileProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

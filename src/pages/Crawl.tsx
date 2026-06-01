@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Layers, ExternalLink, Download } from "lucide-react";
+import { gateAndConsume } from "@/lib/gate";
 
 export default function Crawl() {
   const [params] = useSearchParams();
@@ -23,6 +24,7 @@ export default function Crawl() {
     if (!url.trim()) return toast.error("Enter a URL");
     let normalized = url.trim();
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+    if (!(await gateAndConsume(Math.max(1, Math.ceil(limit / 5))))) return;
     setLoading(true); setJob(null); setJobId(null);
     const { data, error } = await supabase.functions.invoke("firecrawl-crawl", {
       body: {

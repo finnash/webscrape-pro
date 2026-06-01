@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Map as MapIcon, Loader2, Download, Search, ExternalLink, X } from "lucide-react";
+import { gateAndConsume } from "@/lib/gate";
 
 export default function MapPage() {
   const { user } = useAuth();
@@ -32,6 +33,7 @@ export default function MapPage() {
     let normalized = url.trim();
     if (!normalized) { toast.error("Enter a URL"); return; }
     if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+    if (!(await gateAndConsume(1))) return;
     setLoading(true);
     setLinks(null);
     const { data: jobRow } = await supabase.from("jobs").insert({

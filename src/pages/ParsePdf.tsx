@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Loader2, FileText, Copy, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { gateAndConsume } from "@/lib/gate";
 
 export default function ParsePdf() {
   const [url, setUrl] = useState("");
@@ -22,6 +23,7 @@ export default function ParsePdf() {
       // soft warn
       toast.message("URL doesn't end in .pdf — we will still try.");
     }
+    if (!(await gateAndConsume(3))) return;
     setLoading(true); setResult(null);
     const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
       body: { url: normalized, formats: ["markdown", "summary"], onlyMainContent: true },
