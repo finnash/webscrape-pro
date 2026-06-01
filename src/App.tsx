@@ -13,7 +13,6 @@ import SearchPage from "./pages/Search";
 import BrowserSessions from "./pages/Browser";
 import Jobs from "./pages/Jobs";
 import MapPage from "./pages/Map";
-import ComingSoon from "./pages/ComingSoon";
 import NotFound from "./pages/NotFound";
 import Assistant from "./pages/Assistant";
 import Snapshots from "./pages/Snapshots";
