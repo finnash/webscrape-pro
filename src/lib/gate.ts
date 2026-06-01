@@ -6,7 +6,7 @@ import { toast } from "sonner";
  * Surfaces blocked / out-of-credit toasts automatically.
  */
 export const gateAndConsume = async (amount = 1): Promise<boolean> => {
-  const { data, error } = await supabase.rpc("consume_credits", { _amount: amount });
+  const { data, error } = await (supabase as any).rpc("consume_credits", { _amount: amount });
   if (error) {
     toast.error(error.message);
     return false;

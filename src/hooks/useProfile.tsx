@@ -33,9 +33,10 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   const refresh = useCallback(async () => {
     if (!user) { setProfile(null); setIsAdmin(false); setLoading(false); return; }
     setLoading(true);
+    const sb: any = supabase;
     const [{ data: p }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", user.id),
+      sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+      sb.from("user_roles").select("role").eq("user_id", user.id),
     ]);
     setProfile((p as any) ?? null);
     setIsAdmin(Array.isArray(roles) && roles.some((r: any) => r.role === "admin"));

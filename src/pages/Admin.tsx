@@ -40,11 +40,12 @@ export default function Admin() {
 
   const load = async () => {
     setBusy(true);
-    const { data: profs, error } = await supabase.from("profiles")
+    const sb: any = supabase;
+    const { data: profs, error } = await sb.from("profiles")
       .select("user_id, display_name, plan, credits_remaining, daily_credit_limit, blocked_until, block_reason, created_at")
       .order("created_at", { ascending: true });
     if (error) { toast.error(error.message); setBusy(false); return; }
-    const { data: roles } = await supabase.from("user_roles").select("user_id, role");
+    const { data: roles } = await sb.from("user_roles").select("user_id, role");
     const adminSet = new Set((roles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id));
     setRows((profs ?? []).map((p: any) => ({ ...p, is_admin: adminSet.has(p.user_id) })));
     setBusy(false);
@@ -57,7 +58,7 @@ export default function Admin() {
 
   const setPlan = async (row: Row, slug: string) => {
     const planDef = PLANS.find((p) => p.slug === slug)!;
-    const { error } = await supabase.from("profiles").update({
+    const { error } = await (supabase as any).from("profiles").update({
       plan: slug,
       daily_credit_limit: planDef.dailyCredits,
       credits_remaining: planDef.dailyCredits,
@@ -68,20 +69,20 @@ export default function Admin() {
   const block30 = async () => {
     if (!blockFor) return;
     const until = new Date(); until.setDate(until.getDate() + 30);
-    const { error } = await supabase.from("profiles").update({
+    const { error } = await (supabase as any).from("profiles").update({
       blocked_until: until.toISOString(), block_reason: blockReason || "Suspended by admin",
     }).eq("user_id", blockFor.user_id);
     if (error) toast.error(error.message); else { toast.success("Account blocked for 30 days"); setBlockFor(null); load(); }
   };
 
   const unblock = async (row: Row) => {
-    const { error } = await supabase.from("profiles").update({ blocked_until: null, block_reason: null }).eq("user_id", row.user_id);
+    const { error } = await (supabase as any).from("profiles").update({ blocked_until: null, block_reason: null }).eq("user_id", row.user_id);
     if (error) toast.error(error.message); else { toast.success("Account restored"); load(); }
   };
 
   const saveCredits = async () => {
     if (!creditFor) return;
-    const { error } = await supabase.from("profiles").update({ credits_remaining: Math.max(0, creditValue) }).eq("user_id", creditFor.user_id);
+    const { error } = await (supabase as any).from("profiles").update({ credits_remaining: Math.max(0, creditValue) }).eq("user_id", creditFor.user_id);
     if (error) toast.error(error.message); else { toast.success("Credits updated"); setCreditFor(null); load(); }
   };
 
