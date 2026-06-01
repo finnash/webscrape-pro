@@ -3,11 +3,14 @@ import { NavLink, Navigate, useLocation } from "react-router-dom";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
+import { useProfile } from "@/hooks/useProfile";
+import { BlockedScreen } from "@/components/BlockedScreen";
 import { Button } from "@/components/ui/button";
 import { AssistantDock } from "@/components/AssistantDock";
 import {
   LayoutDashboard, Globe, Search, Map as MapIcon, Layers, Sparkles,
   FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut, MessageSquare, Camera, Radar,
+  User as UserIcon, ShieldCheck, Zap,
 } from "lucide-react";
 
 const nav = [
@@ -28,6 +31,7 @@ const nav = [
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const { user, loading, signOut } = useAuth();
   const { theme, toggle } = useTheme();
+  const { profile, isAdmin } = useProfile();
   const location = useLocation();
   const onAssistant = location.pathname.startsWith("/assistant");
 
@@ -35,6 +39,9 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
+
+  const blocked = profile?.blocked_until && new Date(profile.blocked_until) > new Date();
+  if (blocked) return <BlockedScreen />;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -65,9 +72,24 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           ))}
         </nav>
         <div className="px-3 py-3 border-t border-sidebar-border space-y-1">
-          <NavLink to="/settings" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/60">
-            <Settings className="h-4 w-4" /> Settings
+          {isAdmin && (
+            <NavLink to="/admin" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/60">
+              <ShieldCheck className="h-4 w-4" /> Admin
+            </NavLink>
+          )}
+          <NavLink to="/profile" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/60">
+            <UserIcon className="h-4 w-4" /> Profile
           </NavLink>
+          <NavLink to="/settings" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/60">
+            <Settings className="h-4 w-4" /> Plans & Billing
+          </NavLink>
+          {profile && (
+            <NavLink to="/profile" className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-sidebar-accent/60">
+              <Zap className="h-3 w-3 text-primary" />
+              <span>{profile.credits_remaining}/{profile.daily_credit_limit} credits</span>
+              <span className="ml-auto uppercase tracking-wider">{profile.plan}</span>
+            </NavLink>
+          )}
           <div className="flex items-center gap-2 px-3 py-2">
             <div className="flex-1 truncate text-xs text-muted-foreground">{user.email}</div>
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme" className="h-7 w-7">
