@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Sparkles, Copy } from "lucide-react";
+import { gateAndConsume } from "@/lib/gate";
 
 const SAMPLE_SCHEMA = `{
   "type": "object",
@@ -36,6 +37,7 @@ export default function Extract() {
     else {
       try { jsonFormat.schema = JSON.parse(schema); } catch { return toast.error("Invalid JSON schema"); }
     }
+    if (!(await gateAndConsume(6))) return;
     setLoading(true); setResult(null);
     const { data, error } = await supabase.functions.invoke("firecrawl-scrape", {
       body: { url: normalized, formats: [jsonFormat, "markdown"], onlyMainContent: true },

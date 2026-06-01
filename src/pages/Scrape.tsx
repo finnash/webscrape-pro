@@ -16,6 +16,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Globe, Download, Copy, ChevronDown, Sparkles, Loader2, Smartphone, Clock, Zap, FileText, Image as ImageIcon, Link2, Code, X } from "lucide-react";
 import { estimateScrapeCost } from "@/lib/credits";
+import { gateAndConsume } from "@/lib/gate";
 
 const FORMATS = [
   { id: "markdown", label: "Markdown", desc: "Clean LLM-ready text", icon: FileText },
@@ -72,6 +73,7 @@ export default function Scrape() {
       toast.error("That doesn't look like a valid URL. Try the Search tab if you want to search the web.");
       return;
     }
+    if (!(await gateAndConsume(cost))) return;
     setLoading(true);
     setResult(null);
 

@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Search as SearchIcon, Download, Copy, ChevronDown, Loader2, ExternalLink } from "lucide-react";
 import { estimateSearchCost } from "@/lib/credits";
+import { gateAndConsume } from "@/lib/gate";
 
 const TIME_FILTERS = [
   { value: "any", label: "Any time" },
@@ -46,6 +47,7 @@ export default function SearchPage() {
 
   const run = async () => {
     if (!query.trim()) { toast.error("Enter a search query"); return; }
+    if (!(await gateAndConsume(cost))) return;
     setLoading(true);
     setResults(null);
 
