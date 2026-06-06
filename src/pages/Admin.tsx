@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { PLANS } from "@/lib/plans";
 import { toast } from "sonner";
-import { ShieldAlert, ShieldCheck, Loader2, Search, Coins, Ban, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Loader2, Search, Coins, Ban, CheckCircle2, ShieldPlus, ShieldMinus, Trash2, Plus, Minus } from "lucide-react";
 
 type Row = {
   user_id: string;
@@ -35,8 +35,10 @@ export default function Admin() {
   const [q, setQ] = useState("");
   const [creditFor, setCreditFor] = useState<Row | null>(null);
   const [creditValue, setCreditValue] = useState(0);
+  const [creditDelta, setCreditDelta] = useState(0);
   const [blockFor, setBlockFor] = useState<Row | null>(null);
   const [blockReason, setBlockReason] = useState("Suspended by admin");
+  const [terminateFor, setTerminateFor] = useState<Row | null>(null);
 
   const load = async () => {
     setBusy(true);
@@ -82,8 +84,33 @@ export default function Admin() {
 
   const saveCredits = async () => {
     if (!creditFor) return;
-    const { error } = await (supabase as any).from("profiles").update({ credits_remaining: Math.max(0, creditValue) }).eq("user_id", creditFor.user_id);
+    const next = Math.max(0, creditValue + creditDelta);
+    const { error } = await (supabase as any).from("profiles").update({ credits_remaining: next }).eq("user_id", creditFor.user_id);
     if (error) toast.error(error.message); else { toast.success("Credits updated"); setCreditFor(null); load(); }
+  };
+
+  const promoteAdmin = async (row: Row) => {
+    const { error } = await (supabase as any).from("user_roles").insert({ user_id: row.user_id, role: "admin" });
+    if (error) toast.error(error.message); else { toast.success(`${row.display_name || "User"} promoted to admin`); load(); }
+  };
+
+  const demoteAdmin = async (row: Row) => {
+    const { error } = await (supabase as any).from("user_roles").delete().eq("user_id", row.user_id).eq("role", "admin");
+    if (error) toast.error(error.message); else { toast.success("Admin role removed"); load(); }
+  };
+
+  const terminate = async () => {
+    if (!terminateFor) return;
+    // Permanent termination: block 100 years + zero credits + downgrade to free
+    const until = new Date(); until.setFullYear(until.getFullYear() + 100);
+    const { error } = await (supabase as any).from("profiles").update({
+      blocked_until: until.toISOString(),
+      block_reason: "Account terminated by admin",
+      credits_remaining: 0,
+      plan: "free",
+      daily_credit_limit: 0,
+    }).eq("user_id", terminateFor.user_id);
+    if (error) toast.error(error.message); else { toast.success("Account terminated"); setTerminateFor(null); load(); }
   };
 
   const filtered = rows.filter((r) =>
@@ -152,9 +179,18 @@ export default function Admin() {
                   )}
                 </div>
                 <div className="col-span-3 flex justify-end gap-1.5">
-                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setCreditFor(row); setCreditValue(row.credits_remaining); }}>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setCreditFor(row); setCreditValue(row.credits_remaining); setCreditDelta(0); }}>
                     <Coins className="h-3.5 w-3.5 mr-1" /> Credits
                   </Button>
+                  {row.is_admin ? (
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => demoteAdmin(row)}>
+                      <ShieldMinus className="h-3.5 w-3.5 mr-1" /> Demote
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => promoteAdmin(row)}>
+                      <ShieldPlus className="h-3.5 w-3.5 mr-1" /> Promote
+                    </Button>
+                  )}
                   {blocked ? (
                     <Button variant="outline" size="sm" className="h-8" onClick={() => unblock(row)}>
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Unblock
@@ -168,6 +204,13 @@ export default function Admin() {
                       <Ban className="h-3.5 w-3.5 mr-1" /> Block 30d
                     </Button>
                   )}
+                  <Button
+                    variant="outline" size="sm"
+                    className="h-8 text-destructive hover:bg-destructive/10"
+                    disabled={row.is_admin}
+                    onClick={() => setTerminateFor(row)}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Terminate
+                  </Button>
                 </div>
               </div>
             );
@@ -181,10 +224,23 @@ export default function Admin() {
             <DialogTitle>Adjust credits</DialogTitle>
             <DialogDescription>Manually set the remaining daily credits for {creditFor?.display_name || "this user"}.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>Credits remaining today</Label>
-            <Input type="number" value={creditValue} onChange={(e) => setCreditValue(Number(e.target.value))} min={0} />
-            <p className="text-xs text-muted-foreground">Daily cap: {creditFor?.daily_credit_limit}. Resets at 00:05 UTC.</p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Set credits remaining today</Label>
+              <Input type="number" value={creditValue} onChange={(e) => setCreditValue(Number(e.target.value))} min={0} />
+            </div>
+            <div className="space-y-2">
+              <Label>Or add / subtract</Label>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setCreditDelta((d) => d - 50)}><Minus className="h-3.5 w-3.5 mr-1" />50</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCreditDelta((d) => d + 50)}><Plus className="h-3.5 w-3.5 mr-1" />50</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCreditDelta((d) => d + 500)}><Plus className="h-3.5 w-3.5 mr-1" />500</Button>
+                <Input type="number" value={creditDelta} onChange={(e) => setCreditDelta(Number(e.target.value))} className="h-9" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Final: <span className="font-medium text-foreground">{Math.max(0, creditValue + creditDelta)}</span> · Daily cap: {creditFor?.daily_credit_limit}. Resets 00:05 UTC.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreditFor(null)}>Cancel</Button>
@@ -210,6 +266,23 @@ export default function Admin() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setBlockFor(null)}>Cancel</Button>
             <Button variant="destructive" onClick={block30}>Block account</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!terminateFor} onOpenChange={(o) => !o && setTerminateFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" /> Terminate account
+            </DialogTitle>
+            <DialogDescription>
+              Permanently revokes access for {terminateFor?.display_name || "this user"}: plan reset to Free, credits zeroed, and account blocked indefinitely. You can restore later with Unblock.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTerminateFor(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={terminate}>Terminate account</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
