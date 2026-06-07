@@ -7,7 +7,7 @@ import {
   ArrowRight, Globe, Search, Sparkles, Monitor, Zap, Radar, Bell, Command,
   CheckCircle2, Activity,
 } from "lucide-react";
-import { lifetimeEstimates, TOTAL_CREDITS } from "@/lib/credits";
+import { lifetimeEstimates } from "@/lib/credits";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Home() {
@@ -180,6 +180,5 @@ const CatMark = ({ className }: { className?: string }) => (
       <circle cx="116" cy="92" r="4" />
     </g>
     <path d="M245 110 Q280 120 270 150 Q258 180 295 175" stroke="hsl(var(--primary))" strokeWidth="2" fill="none" strokeLinecap="round" />
-    <text x="260" y="195" fill="hsl(var(--primary))" fontFamily="cursive" fontSize="22" fontStyle="italic">meow</text>
   </svg>
 );
