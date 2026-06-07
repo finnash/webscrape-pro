@@ -73,6 +73,54 @@ export type Database = {
           },
         ]
       }
+      gmb_scrape_runs: {
+        Row: {
+          created_at: string
+          credits_used: number
+          error: string | null
+          filters: Json
+          id: string
+          keyword: string
+          limit_count: number
+          location: string | null
+          result_count: number
+          results: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          error?: string | null
+          filters?: Json
+          id?: string
+          keyword: string
+          limit_count?: number
+          location?: string | null
+          result_count?: number
+          results?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          error?: string | null
+          filters?: Json
+          id?: string
+          keyword?: string
+          limit_count?: number
+          location?: string | null
+          result_count?: number
+          results?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       jobs: {
         Row: {
           created_at: string
