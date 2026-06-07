@@ -10,7 +10,7 @@ import { AssistantDock } from "@/components/AssistantDock";
 import {
   LayoutDashboard, Globe, Search, Map as MapIcon, Layers, Sparkles,
   FileText, Monitor, ListChecks, Settings, Moon, Sun, LogOut, MessageSquare, Camera, Radar,
-  User as UserIcon, ShieldCheck, Zap,
+  User as UserIcon, ShieldCheck, Zap, MapPin,
 } from "lucide-react";
 
 const nav = [
@@ -18,6 +18,7 @@ const nav = [
   { to: "/scrape", label: "Scrape", icon: Globe, ready: true },
   { to: "/search", label: "Search", icon: Search, ready: true },
   { to: "/monitor", label: "Monitor", icon: Radar, ready: true },
+  { to: "/gmb", label: "GMB Scraper", icon: MapPin, ready: true },
   { to: "/map", label: "Map", icon: MapIcon },
   { to: "/assistant", label: "AI Assistant", icon: MessageSquare, ready: true },
   { to: "/snapshots", label: "Snapshots", icon: Camera, ready: true },

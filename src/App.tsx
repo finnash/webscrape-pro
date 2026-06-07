@@ -23,6 +23,7 @@ import MonitorPage from "./pages/Monitor";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
+import GmbScraper from "./pages/GmbScraper";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/extract" element={<Extract />} />
               <Route path="/parse" element={<ParsePdf />} />
               <Route path="/monitor" element={<MonitorPage />} />
+              <Route path="/gmb" element={<GmbScraper />} />
             <Route path="/browser" element={<BrowserSessions />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/assistant/:threadId" element={<Assistant />} />
