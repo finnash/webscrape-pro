@@ -48,24 +48,13 @@ export default function Home() {
         </header>
 
         <div className="relative max-w-6xl mx-auto px-4 sm:px-8 pt-8 sm:pt-14 pb-12">
-          {/* Hero */}
-          <div className="relative">
-            <div className="max-w-2xl">
-              <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight leading-[1.05]">
-                Watch the web.
-                <br />
-                <span className="text-gradient-fire">Pounce</span>{" "}
-                <span className="text-foreground">on what changes.</span>
-              </h1>
-              <p className="mt-5 text-muted-foreground sm:text-lg max-w-lg">
-                Turn any URL into clean data, monitor what matters, and get notified the moment something moves.
-              </p>
-            </div>
-            <CatMark className="hidden md:block absolute -top-4 right-0 w-[300px]" />
+          {/* Brand mark */}
+          <div className="relative flex justify-center">
+            <CatMark className="w-[260px] sm:w-[320px]" />
           </div>
 
           {/* Command bar */}
-          <form onSubmit={go} className="mt-10">
+          <form onSubmit={go} className="mt-8">
             <div className="rounded-2xl border border-border bg-card shadow-elegant p-3 focus-within:ring-2 focus-within:ring-primary/40 transition">
               <div className="flex items-center gap-2 pl-3">
                 <Globe className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -102,22 +91,14 @@ export default function Home() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
-              <span className="text-muted-foreground">All systems operational</span>
             </div>
             <div className="ml-auto flex items-center gap-2 text-muted-foreground">
-              <span>Your last run:</span>
-              <span className="text-foreground font-medium">example.com scrape</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary text-xs px-2 py-0.5">
-                <CheckCircle2 className="h-3 w-3" /> Completed
+                <CheckCircle2 className="h-3 w-3" />
               </span>
-              <span className="text-xs">2m ago</span>
               <Link to="/jobs" className="text-foreground hover:text-primary"><ArrowRight className="h-4 w-4" /></Link>
             </div>
           </div>
-
-          <p className="mt-4 text-xs text-muted-foreground text-center">
-            ~1 credit per page · {TOTAL_CREDITS.toLocaleString()} credits in your account
-          </p>
         </div>
       </div>
     </AppShell>
