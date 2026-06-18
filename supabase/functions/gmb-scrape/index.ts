@@ -26,6 +26,7 @@ type Business = {
   reviews?: number;
   hours?: string;
   url?: string;
+  hasWebsiteButton?: boolean;
   websiteStatus?: "verified_none" | "present" | "unknown";
   websiteEvidence?: string;
 };
@@ -188,6 +189,8 @@ Deno.serve(async (req) => {
               reviews: { type: "number" },
               hours: { type: "string" },
               url: { type: "string" },
+              hasWebsiteButton: { type: "boolean" },
+              websiteEvidence: { type: "string" },
             },
           },
         },
@@ -198,8 +201,9 @@ Deno.serve(async (req) => {
     const extractionLimit = noWebsiteOnly ? Math.min(100, Math.max(limit * 3, limit + 20)) : limit;
     const promptParts = [
       `Extract up to ${extractionLimit} business listings from this Google Maps search results page for "${query}".`,
-      `For each listing capture: name, primary category, full address, phone, website URL exactly as shown (empty string if no Website button is shown), star rating, review count, opening hours snippet, and the Google Maps listing URL.`,
-      noWebsiteOnly ? "Include candidates that appear to have no Website button. Accuracy matters more than quantity; uncertain listings will be verified later." : "",
+      `For each listing capture: name, primary category, full address, phone, website URL exactly as shown, star rating, review count, opening hours snippet, and the Google Maps listing URL.`,
+      `Also capture hasWebsiteButton as TRUE if the listing/card shows a Website button, official website link, globe icon website action, or any non-Google outbound website. Capture websiteEvidence as the exact short text/button evidence used.`,
+      noWebsiteOnly ? "For no-website mode, accuracy is strict: only include a listing when hasWebsiteButton is definitely false. If uncertain, mark hasWebsiteButton true." : "",
       hasPhone ? "ONLY include businesses with a visible phone number." : "",
       openNow ? "Prefer businesses marked Open now." : "",
       typeof minRating === "number" ? `Only include businesses with rating >= ${minRating}.` : "",
@@ -220,19 +224,18 @@ Deno.serve(async (req) => {
     }));
 
     if (noWebsiteOnly) {
-      businesses = businesses.filter((b) => !normalizeWebsite(b.website));
+      businesses = businesses
+        .filter((b) => !normalizeWebsite(b.website))
+        .filter((b) => b.hasWebsiteButton === false)
+        .filter((b) => !/\bwebsite\b/i.test(String(b.websiteEvidence || "")))
+        .map((b) => ({ ...b, website: "", websiteStatus: "verified_none" as const }));
     }
     if (hasPhone) businesses = businesses.filter((b) => !!b.phone && String(b.phone).trim().length > 4);
     if (typeof minRating === "number") {
       businesses = businesses.filter((b) => typeof b.rating === "number" && b.rating >= minRating);
     }
 
-    let rejectedWebsiteMatches = 0;
-    if (noWebsiteOnly && businesses.length > 0) {
-      const verified = await verifyNoWebsiteStrict(apiKey, businesses, limit);
-      businesses = verified.accepted;
-      rejectedWebsiteMatches = verified.rejectedCount;
-    }
+    const rejectedWebsiteMatches = noWebsiteOnly ? Math.max(0, (Array.isArray(extracted) ? extracted.length : 0) - businesses.length) : 0;
 
     businesses = businesses.slice(0, limit);
 
