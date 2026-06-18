@@ -217,49 +217,43 @@ Deno.serve(async (req) => {
       required: ["businesses"],
     };
 
+    const extractionLimit = noWebsiteOnly ? Math.min(100, Math.max(limit * 3, limit + 20)) : limit;
     const promptParts = [
-      `Extract up to ${limit} business listings from this Google Maps search results page for "${query}".`,
-      `For each listing capture: name, primary category, full address, phone, website URL (null if none shown), star rating, review count, opening hours snippet, and the Google Maps listing URL.`,
-      noWebsiteOnly ? "ONLY include businesses that have NO website link." : "",
+      `Extract up to ${extractionLimit} business listings from this Google Maps search results page for "${query}".`,
+      `For each listing capture: name, primary category, full address, phone, website URL exactly as shown (empty string if no Website button is shown), star rating, review count, opening hours snippet, and the Google Maps listing URL.`,
+      noWebsiteOnly ? "Include candidates that appear to have no Website button. Accuracy matters more than quantity; uncertain listings will be verified later." : "",
       hasPhone ? "ONLY include businesses with a visible phone number." : "",
       openNow ? "Prefer businesses marked Open now." : "",
       typeof minRating === "number" ? `Only include businesses with rating >= ${minRating}.` : "",
     ].filter(Boolean).join(" ");
 
-    const fcRes = await fetch("https://api.firecrawl.dev/v2/scrape", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: mapsUrl,
-        formats: [{ type: "json", schema, prompt: promptParts }],
-        onlyMainContent: false,
-        waitFor: 3500,
-        location: { country: "US", languages: ["en"] },
-      }),
+    const payload = await firecrawlScrape(apiKey, {
+      url: mapsUrl,
+      formats: [{ type: "json", schema, prompt: promptParts }],
+      onlyMainContent: false,
+      waitFor: 5000,
+      location: { country: "US", languages: ["en"] },
     });
-
-    const data = await fcRes.json();
-    if (!fcRes.ok) {
-      return new Response(
-        JSON.stringify({ success: false, error: data?.error || `Firecrawl ${fcRes.status}`, status: fcRes.status }),
-        { status: fcRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    const payload = data.data ?? data;
     const extracted: Business[] = payload?.json?.businesses ?? payload?.extract?.businesses ?? [];
 
-    let businesses = Array.isArray(extracted) ? extracted : [];
+    let businesses = (Array.isArray(extracted) ? extracted : []).map((business) => ({
+      ...business,
+      website: normalizeWebsite(business.website) || "",
+    }));
 
     if (noWebsiteOnly) {
-      businesses = businesses.filter((b) => !b.website || /^(n\/?a|none|null)$/i.test(String(b.website).trim()));
+      businesses = businesses.filter((b) => !normalizeWebsite(b.website));
     }
     if (hasPhone) businesses = businesses.filter((b) => !!b.phone && String(b.phone).trim().length > 4);
     if (typeof minRating === "number") {
       businesses = businesses.filter((b) => typeof b.rating === "number" && b.rating >= minRating);
+    }
+
+    let rejectedWebsiteMatches = 0;
+    if (noWebsiteOnly && businesses.length > 0) {
+      const verified = await verifyNoWebsiteStrict(apiKey, businesses, limit);
+      businesses = verified.accepted;
+      rejectedWebsiteMatches = verified.rejectedCount;
     }
 
     businesses = businesses.slice(0, limit);
@@ -270,6 +264,7 @@ Deno.serve(async (req) => {
         query,
         source_url: mapsUrl,
         count: businesses.length,
+        rejectedWebsiteMatches,
         businesses,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
