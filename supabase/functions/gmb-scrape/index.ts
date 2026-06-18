@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     });
     const extracted: Business[] = payload?.json?.businesses ?? payload?.extract?.businesses ?? [];
 
-    let businesses = (Array.isArray(extracted) ? extracted : []).map((business) => ({
+    let businesses: Business[] = (Array.isArray(extracted) ? extracted : []).map((business) => ({
       ...business,
       website: normalizeWebsite(business.website) || "",
     }));
