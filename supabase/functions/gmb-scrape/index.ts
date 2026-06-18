@@ -95,6 +95,10 @@ const extractPayloadLinks = (payload: any): string[] => {
   return Array.isArray(links) ? links.filter((link) => typeof link === "string") : [];
 };
 
+const extractPayloadText = (payload: any): string => {
+  return String(payload?.markdown ?? payload?.data?.markdown ?? payload?.html ?? payload?.data?.html ?? "");
+};
+
 const verifyNoWebsiteOnMapsListing = async (apiKey: string, business: Business): Promise<Business | null> => {
   const directWebsite = normalizeWebsite(business.website);
   if (directWebsite) return null;
@@ -105,60 +109,34 @@ const verifyNoWebsiteOnMapsListing = async (apiKey: string, business: Business):
 
   const listingUrl = business.url.startsWith("http") ? business.url : `https://www.google.com/maps/search/${encodeURIComponent(business.name || "")}`;
 
-  const schema = {
-    type: "object",
-    properties: {
-      hasWebsiteButton: { type: "boolean" },
-      websiteUrl: { type: ["string", "null"] },
-      evidence: { type: "string" },
-    },
-    required: ["hasWebsiteButton"],
-  };
-
   const payload = await firecrawlScrape(apiKey, {
     url: listingUrl,
-    formats: [
-      "links",
-      {
-        type: "json",
-        schema,
-        prompt: [
-          "Inspect this individual Google Maps business listing only.",
-          "Return hasWebsiteButton=true if the listing contains a Website button, official website link, or non-Google outbound business website.",
-          "Return hasWebsiteButton=false only when there is clearly no Website button/link on the listing.",
-          "Do not infer from web search results; use only this Maps listing page.",
-        ].join(" "),
-      },
-    ],
+    formats: ["links", "markdown"],
     onlyMainContent: false,
-    waitFor: 5000,
+    waitFor: 2500,
     location: { country: "US", languages: ["en"] },
   });
 
-  const json = payload?.json ?? payload?.extract ?? {};
-  const jsonWebsite = normalizeWebsite(json?.websiteUrl);
   const linkWebsite = extractPayloadLinks(payload)
     .map((link) => normalizeWebsite(link))
     .find((link) => link && !isLikelyGoogleInternalLink(link));
+  const pageText = extractPayloadText(payload).toLowerCase();
 
-  if (json?.hasWebsiteButton === true || jsonWebsite || linkWebsite) return null;
+  if (linkWebsite || pageText.includes("website")) return null;
 
-  if (json?.hasWebsiteButton !== false) {
-    return { ...business, website: "", websiteStatus: "unknown", websiteEvidence: json?.evidence || "Website status could not be verified" };
-  }
-
-  return { ...business, website: "", websiteStatus: "verified_none", websiteEvidence: json?.evidence || "No Website button found on Maps listing" };
+  return { ...business, website: "", websiteStatus: "verified_none", websiteEvidence: "No outbound website link found on Maps listing" };
 };
 
 const verifyNoWebsiteStrict = async (apiKey: string, candidates: Business[], limit: number) => {
   const accepted: Business[] = [];
   const rejected: Business[] = [];
+  const verificationPool = candidates.slice(0, Math.min(candidates.length, Math.max(limit * 2, 8)));
   const concurrency = 4;
   let index = 0;
 
   const worker = async () => {
-    while (index < candidates.length && accepted.length < limit) {
-      const current = candidates[index++];
+    while (index < verificationPool.length && accepted.length < limit) {
+      const current = verificationPool[index++];
       try {
         const verified = await verifyNoWebsiteOnMapsListing(apiKey, current);
         if (verified?.websiteStatus === "verified_none") accepted.push(verified);
@@ -169,7 +147,7 @@ const verifyNoWebsiteStrict = async (apiKey: string, candidates: Business[], lim
     }
   };
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(concurrency, verificationPool.length) }, worker));
   return { accepted: accepted.slice(0, limit), rejectedCount: rejected.length };
 };
 
