@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
       businesses = businesses
         .filter((b) => !normalizeWebsite(b.website))
         .filter((b) => b.hasWebsiteButton === false)
-        .filter((b) => !/\bwebsite\b/i.test(String(b.websiteEvidence || "")))
+        .filter((b) => !/(https?:\/\/|www\.|\.[a-z]{2,}\b|website button visible|official website)/i.test(String(b.websiteEvidence || "")))
         .map((b) => ({ ...b, website: "", websiteStatus: "verified_none" as const }));
     }
     if (hasPhone) businesses = businesses.filter((b) => !!b.phone && String(b.phone).trim().length > 4);
