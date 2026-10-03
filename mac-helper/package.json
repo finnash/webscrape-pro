@@ -1,0 +1,22 @@
+{
+  "name": "meow-voice",
+  "version": "1.0.0",
+  "description": "Meow Scraper floating voice helper for macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "app.meowscraper.voice",
+    "productName": "Meow Voice",
+    "mac": {
+      "target": "dmg",
+      "extendInfo": { "NSMicrophoneUsageDescription": "Meow Voice listens to your scrape and research commands.", "LSUIElement": true }
+    }
+  }
+}
