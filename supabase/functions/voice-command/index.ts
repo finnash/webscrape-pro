@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       const file = form.get("file");
       if (!(file instanceof File) || !file.size || file.size > MAX) return json({ error: "Invalid audio" }, 400);
       const f = new FormData();
-      f.append("model", "google/gemini-3.5-transcribe");
+      f.append("model", "openai/gpt-transcribe");
       f.append("file", new File([file], "voice.webm", { type: "audio/webm" }));
       f.append("response_format", "json");
       const tr = await fetch(`${GW}/v1/audio/transcriptions`, {
