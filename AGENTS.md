@@ -1,0 +1,1 @@
+- The Mac voice helper (mac-helper/, Electron) is a thin client: it signs in as a normal user and calls the voice-command function; all scraping/AI logic stays server-side so web and desktop behave the same.
